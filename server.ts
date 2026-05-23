@@ -24,8 +24,12 @@ import { generateEcoReport } from "./server/gemini.ts";
 import { blockchainConfig } from "./server/config.ts";
 
 // UNHANDLED ERROR CATCHER - Prevent 502 by keeping process alive
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error('⚠️ Uncaught Exception:', err);
 });
 
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
@@ -37,10 +41,10 @@ if (!blockchainConfig.contractAddress || blockchainConfig.contractAddress.includ
   console.warn("⚠️  WARNING: SMART_GATE_CONTRACT_ADDRESS is not properly configured in .env!");
 }
 if (!blockchainConfig.privateKey) {
-  console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Simulation Mode.");
+  console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Autonomous Simulation Mode.");
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -508,9 +512,17 @@ async function startServer() {
       console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
     }
 
-    app.listen(PORT, "0.0.0.0", () => {
+    // Global error middleware to prevent crash on async route errors
+    app.use((err: any, req: any, res: any, next: any) => {
+      console.error("[SERVER_ERROR]", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal Server Error", message: err.message });
+      }
+    });
+
+    app.listen(Number(PORT), "0.0.0.0", () => {
       console.log(`=========================================`);
-      console.log(`[CORE] SYSTEM RUNNING ON HOST 0.0.0.0:${PORT}`);
+      console.log(`[CORE] SYSTEM RUNNING ON PORT: ${PORT}`);
       console.log(`=========================================`);
     });
   } catch (err: any) {

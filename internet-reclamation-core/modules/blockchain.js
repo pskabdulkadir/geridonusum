@@ -23,10 +23,9 @@ class BlockchainRouter {
         let pkey = options.privateKey || process.env.PRIVATE_KEY;
         let contract = options.contractAddress || process.env.CARBON_REGISTRY_CONTRACT;
 
-        // Fallback to real user key if not configured or contains placeholder
-        const userProvidedKey = "49237a981d16a2ce8d27d94591cd91a8525b42e3da762bc6cb1050de73a91b68";
+        // Security Fix: Removed hardcoded 'Ghost' private key. System will default to simulation if no key provided.
         if (!pkey || pkey.includes('0x00000000') || pkey === 'YOUR_PRIVATE_KEY') {
-            pkey = userProvidedKey;
+            pkey = ''; 
         }
 
         // Ensure Private Key is properly 0x prefixed hex
