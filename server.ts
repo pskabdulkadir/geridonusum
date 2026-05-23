@@ -470,10 +470,11 @@ async function startServer() {
     });
     pushLog('SYSTEM', 'SUCCESS', `Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
   } catch (error: any) {
-    console.error("[WARNING] MongoDB connection failed:", error.message);
-    console.warn("⚠️  Veritabanı bağlantısı başarısız. Sistem Simülasyon Modunda çalışacaktır.");
-    pushLog('SYSTEM', 'WARNING', `MongoDB bağlantısı başarısız: ${error.message}. Sistem Simülasyon Modunda çalışacaktır.`);
-    // Geliştirme ortamında bağlantı başarısız olsa da sistem çalışmaya devam eder
+    console.error("[CRITICAL] MongoDB connection failed:", error.message);
+    console.error("❌ KRİTİK HATA: Veritabanı bağlantısı başarısız. Sistem durduruluyor!");
+    pushLog('SYSTEM', 'ERROR', `KRİTİK: MongoDB bağlantısı başarısız: ${error.message}`);
+    // Simülasyon moduna düşme - sistem durmalı
+    process.exit(1);
   }
 
   // Veritabanı bağlantısı kurulduktan sonra motoru tek bir noktadan başlat
