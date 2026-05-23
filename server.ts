@@ -202,6 +202,12 @@ async function runBotTaskRecursive() {
         if (serverState.zeroGasModeActive) {
           const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
           const calculatedPrice = parseFloat((Math.max(5.00, metric.co2SavingsGrams * 2.5) + (Math.random() * 2)).toFixed(2));
+
+          if (mongoose.connection.readyState !== 1) {
+            pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. READY_TO_SELL öğesi kaydedilemedi.');
+            return; // Veritabanı bağlantısı yoksa işlemi durdur
+          }
+
           
           const newItem: ReadyToSellItem = {
             id: generatedId,
@@ -226,6 +232,10 @@ async function runBotTaskRecursive() {
           const blockResult = await mainBlockchain.triggerBorsaSwap(metric.co2SavingsGrams, proofHash);
           
           if (blockResult.success) {
+            if (mongoose.connection.readyState !== 1) {
+              pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İşlem kaydı yapılamadı.');
+              return; // Veritabanı bağlantısı yoksa işlemi durdur
+            }
             await TransactionModel.create({
               url,
               proofHash,
@@ -263,8 +273,17 @@ pushLog('SYSTEM', 'INFO', 'İnternet Geri Kazanım Komut Arayüzü hazır ve çe
  */
 app.get("/api/stats", async (req, res) => {
   try {
-    const readyToSell = await ReadyToSellModel.find().sort({ timestamp: -1 }).limit(50);
-    const transactions = await TransactionModel.find().sort({ timestamp: -1 }).limit(50);
+    let readyToSell: ReadyToSellItem[] = [];
+    let transactions: TransactionRecord[] = [];
+    let blockchainProofsMinted = 0;
+
+    if (mongoose.connection.readyState === 1) { // 1 means connected
+      readyToSell = await ReadyToSellModel.find().sort({ timestamp: -1 }).limit(50);
+      transactions = await TransactionModel.find().sort({ timestamp: -1 }).limit(50);
+      blockchainProofsMinted = transactions.length;
+    } else {
+      pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İstatistikler veritabanından alınamadı.');
+    }
 
     res.json({
       pagesProcessed: serverState.pagesProcessed,
@@ -272,7 +291,7 @@ app.get("/api/stats", async (req, res) => {
       optimizedSizeTotal: serverState.optimizedSizeTotal,
       totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      blockchainProofsMinted: transactions.length,
+      blockchainProofsMinted: blockchainProofsMinted,
       transactions: transactions,
       visitedUrls: Array.from(serverState.visitedUrls),
       isCrawling: serverState.isCrawling,
@@ -312,7 +331,12 @@ app.post("/api/payout-config", (req, res) => {
  */
 app.post("/api/simulate-purchase", async (req, res) => {
   const { itemId } = req.body;
-  const item = await ReadyToSellModel.findOne({ id: itemId });
+  let item: ReadyToSellItem | null = null;
+  if (mongoose.connection.readyState === 1) {
+    item = await ReadyToSellModel.findOne({ id: itemId });
+  } else {
+    return res.status(503).json({ error: "Veritabanı bağlantısı aktif değil. İşlem yapılamadı." });
+  }
   
   if (!item) {
     return res.status(404).json({ error: "Veri paketi bulunamadı." });
@@ -323,7 +347,11 @@ app.post("/api/simulate-purchase", async (req, res) => {
   }
   
   // 1. Mark as sold to lock state immediately
-  item.isSold = true;
+  if (mongoose.connection.readyState === 1) {
+    await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
+  } else {
+    pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. Veri paketi güncellenemedi.');
+  }
   
   // Set the payout amount in BNB (0.0005 BNB is ~ $0.30 - $0.40, a very safe micro-payment to test live block integration without draining real funds)
   const bnbAmount = "0.0005"; 
@@ -343,7 +371,11 @@ app.post("/api/simulate-purchase", async (req, res) => {
   };
   
   if (txResult.success) {
-    await TransactionModel.create(record);
+    if (mongoose.connection.readyState === 1) {
+      await TransactionModel.create(record);
+    } else {
+      pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İşlem kaydı yapılamadı.');
+    }
 
     if (txResult.simulated) {
       pushLog('BLOCKCHAIN', 'SUCCESS', `[SIFIR_KOMISYON_ODEMESI] 0x71C7656EC7ab88b098defB751B7401B5f6d8976F kontratına $${item.marketPriceUSD.toFixed(2)} USDT yatırıldı!`);
@@ -357,7 +389,11 @@ app.post("/api/simulate-purchase", async (req, res) => {
     res.json({ success: true, item, transaction: record });
   } else {
     // Reverse status so the user can re-try after funding or adding key
-    await ReadyToSellModel.updateOne({ id: itemId }, { isSold: false });
+    if (mongoose.connection.readyState === 1) {
+      await ReadyToSellModel.updateOne({ id: itemId }, { isSold: false });
+    } else {
+      pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. Veri paketi geri alınamadı.');
+    }
     pushLog('BLOCKCHAIN', 'ERROR', `Blockchain payouts transferi gerçekleştirilemedi: ${txResult.error}`);
     res.status(500).json({ error: txResult.error || "Blockchain payout transaction failed." });
   }
@@ -519,8 +555,8 @@ async function startServer() {
     try {
       await mongoose.connect(dbConfig.uri, { dbName: dbConfig.dbName });
       pushLog('SYSTEM', 'SUCCESS', `MongoDB'ye başarıyla bağlandı: ${dbConfig.dbName}`);
-    } catch (error: any) {
-      pushLog('SYSTEM', 'ERROR', `MongoDB bağlantı hatası: ${error.message}`);
+    } catch (error: any) { // If DB URI is provided but connection fails, it's a critical error.
+      pushLog('SYSTEM', 'ERROR', `MongoDB bağlantı hatası: ${error.message}. Sunucu başlatılamıyor.`);
       console.error("[CRITICAL] MongoDB connection failed:", error.message);
       // Uygulamanın veritabanı olmadan çalışmasını engellemek için çıkış yapabiliriz
       // process.exit(1); 
