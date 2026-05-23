@@ -468,17 +468,18 @@ async function startServer() {
       connectTimeoutMS: 5000,
       serverSelectionTimeoutMS: 5000
     });
+    console.log(`✅ Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
     pushLog('SYSTEM', 'SUCCESS', `Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
+
+    // Veritabanı bağlantısı başarılı olduğunda motoru başlat
+    startAutomatedTrading();
   } catch (error: any) {
     console.error("[CRITICAL] MongoDB connection failed:", error.message);
     console.error("❌ KRİTİK HATA: Veritabanı bağlantısı başarısız. Sistem durduruluyor!");
-    pushLog('SYSTEM', 'ERROR', `KRİTİK: MongoDB bağlantısı başarısız: ${error.message}`);
-    // Simülasyon moduna düşme - sistem durmalı
+    console.error("📌 Çözüm: MongoDB Atlas IP whitelist'ini kontrol edin: https://www.mongodb.com/docs/atlas/security-whitelist/");
+    // Simülasyona düşme YAPMA - sistem durmalı
     process.exit(1);
   }
-
-  // Veritabanı bağlantısı kurulduktan sonra motoru tek bir noktadan başlat
-  startAutomatedTrading();
 
   try {
     if (process.env.NODE_ENV !== "production") {
