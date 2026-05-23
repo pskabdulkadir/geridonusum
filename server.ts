@@ -59,7 +59,7 @@ const serverState = {
   isCrawling: false,
   currentCrawlingUrl: "",
   readyToSell: [] as ReadyToSellItem[],
-  payoutWalletAddress: "0x89205AbaE846560FDeB791CfFEE17482D2Ec739d", // Default configurable user wallet address
+  payoutWalletAddress: "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4", // Default configurable user wallet address
   zeroGasModeActive: true, // Defaulting to zero-gas autonomous sales protocol
 };
 

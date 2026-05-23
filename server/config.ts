@@ -8,7 +8,7 @@ dotenv.config();
 
 export const blockchainConfig = {
     contractAddress: process.env.SMART_GATE_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000',
-    payoutWallet: process.env.CHANNEL_ROUTING_WALLET || '0x89205AbaE846560FDeB791CfFEE17482D2Ec739D',
+    payoutWallet: process.env.CHANNEL_ROUTING_WALLET || '0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4',
     rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com',
     privateKey: process.env.INCOME_DISTRIBUTION_WALLET || '',
     zeroGasActive: process.env.ZERO_GAS_SELLER_NODE === 'true',

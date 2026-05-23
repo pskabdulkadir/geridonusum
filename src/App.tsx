@@ -56,7 +56,7 @@ export default function App() {
     isCrawling: false,
     currentCrawlingUrl: "",
     readyToSell: [],
-    payoutWalletAddress: "0x89205AbaE846560FDeB791CfFEE17482D2Ec739d",
+    payoutWalletAddress: "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
     zeroGasModeActive: true,
   });
 
