@@ -7,6 +7,7 @@
  * @license SPDX-License-Identifier: Apache-2.0
  */
 
+import mongoose from "mongoose";
 import express from "express";
 import path from "path";
 import axios from "axios";
@@ -46,6 +47,12 @@ if (!blockchainConfig.privateKey) {
 if (!dbConfig.uri) {
   console.warn("⚠️  WARNING: MONGO_URI is not configured. Database persistence may be disabled.");
 }
+if (!blockchainConfig.geminiApiKey || blockchainConfig.geminiApiKey === "MY_GEMINI_API_KEY") {
+  console.warn("⚠️  WARNING: GEMINI_API_KEY is not configured. Gemini AI features may be limited.");
+}
+if (!blockchainConfig.appUrl || blockchainConfig.appUrl === "MY_APP_URL") {
+  console.warn("⚠️  WARNING: APP_URL is not configured. Self-referential links may be incorrect.");
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -66,7 +73,7 @@ const serverState = {
   isCrawling: false,
   currentCrawlingUrl: "",
   readyToSell: [] as ReadyToSellItem[],
-  payoutWalletAddress: "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4", // Default configurable user wallet address
+  payoutWalletAddress: blockchainConfig.payoutWallet, // Initialize from config
   zeroGasModeActive: blockchainConfig.zeroGasActive, // Initialize from config for zero-gas autonomous sales protocol
 };
 
@@ -497,6 +504,20 @@ app.post("/api/optimize-url", async (req, res) => {
    ========================================== */
 
 async function startServer() {
+  // Connect to MongoDB
+  if (dbConfig.uri) {
+    try {
+      await mongoose.connect(dbConfig.uri, { dbName: dbConfig.dbName });
+      pushLog('SYSTEM', 'SUCCESS', `MongoDB'ye başarıyla bağlandı: ${dbConfig.dbName}`);
+    } catch (error: any) {
+      pushLog('SYSTEM', 'ERROR', `MongoDB bağlantı hatası: ${error.message}`);
+      console.error("[CRITICAL] MongoDB connection failed:", error.message);
+      // Uygulamanın veritabanı olmadan çalışmasını engellemek için çıkış yapabiliriz
+      // process.exit(1); 
+    }
+  } else {
+    pushLog('SYSTEM', 'WARNING', 'MongoDB URI yapılandırılmadığı için veritabanı bağlantısı kurulmadı.');
+  }
   try {
     if (process.env.NODE_ENV !== "production") {
       const vite = await createViteServer({

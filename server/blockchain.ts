@@ -15,13 +15,14 @@ export class BlockchainRouter {
   public rpcEndpoints: string[];
   public privateKey: string;
   public contractAddress: string;
+  private isRealMode: boolean = false;
 
   private logCallback?: (module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) => void;
 
   // Mint function definition support including submitted CarbonHarvester contract requested by user
   private contractAbi = [
     "function mintAndSwap(uint256 amount, string memory proof) public returns (bool)",
-    "function submitProof(bytes32 proofHash, uint256 amount) external"
+    "function submitProof(bytes32 proofHash, uint256 amount) external returns (bool)"
   ];
 
   constructor(options: { rpcUrl?: string; privateKey?: string; contractAddress?: string } = {}) {
@@ -37,13 +38,13 @@ export class BlockchainRouter {
     if (!contract || 
         contract.includes('0x000000000000000000000000') || 
         contract === 'YOUR_CONTRACT_ADDRESS') {
-      contract = '0x0000000000000000000000000000000000000000';
+      contract = ethers.constants.AddressZero;
     }
 
     this.rpcEndpoints = Array.from(new Set([
       rpc,
-      'https://polygon-mainnet.g.alchemy.com/v2/G-qA0bZx-DU57eXe83q8e',
       'https://polygon-rpc.com',
+      'https://polygon-mainnet.g.alchemy.com/v2/G-qA0bZx-DU57eXe83q8e',
       'https://rpc.ankr.com/polygon',
       'https://polygon.llamarpc.com',
       'https://1rpc.io/matic',
@@ -53,6 +54,11 @@ export class BlockchainRouter {
     this.rpcUrl = this.rpcEndpoints[0];
     this.privateKey = pkey;
     this.contractAddress = contract;
+
+    // Sistemin gerçek ağa bağlanabilirliğini doğrula
+    this.isRealMode = !!(this.privateKey && this.privateKey.length >= 64 && 
+                        !this.privateKey.includes('00000000') && !this.privateKey.includes('YOUR_PRIVATE_KEY') &&
+                        this.rpcUrl && !this.rpcUrl.includes('YOUR_API_KEY') && !this.rpcUrl.includes('YOUR_ALCHEMY_OR_INFURA_URL'));
   }
 
   public registerLogger(cb: typeof this.logCallback) {
@@ -60,54 +66,77 @@ export class BlockchainRouter {
   }
 
   private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {
+    // GÜVENLİK FİLTRESİ: Loglarda asla private key geçmemeli
+    if (this.privateKey && msg.includes(this.privateKey)) {
+      msg = msg.replace(this.privateKey, "***GIZLI_ANAHTAR***");
+    }
+    // GÜVENLİK FİLTRESİ: Loglarda APP_URL geçmemeli
+    if (blockchainConfig.appUrl && msg.includes(blockchainConfig.appUrl)) {
+      msg = msg.replace(blockchainConfig.appUrl, "***APP_URL***");
+    }
+    // Cüzdan adresini kısaltarak logla (0x123...abcd)
+    if (this.privateKey && msg.includes(this.privateKey)) {
+        msg = msg.replace(this.privateKey, "SECRET_KEY");
+    }
     if (this.logCallback) {
       this.logCallback(module, level, msg);
     }
   }
 
   /**
+   * Blokzinciri hatalarını kullanıcı dostu Türkçe mesajlara dönüştürür.
+   */
+  private parseBlockchainError(err: any): string {
+    const message = err?.message || String(err);
+    if (message.includes('insufficient funds')) return "Cüzdanda gas ücreti için yetersiz bakiye (POL/BNB eksik).";
+    if (message.includes('nonce too low')) return "Ağda bekleyen başka bir işlem var, lütfen bekleyin.";
+    if (message.includes('replacement transaction underpriced')) return "İşlem ücreti çok düşük, ağ kabul etmedi.";
+    if (message.includes('user rejected')) return "İşlem kullanıcı tarafından reddedildi.";
+    if (message.includes('execution reverted')) return "Akıllı kontrat işlemi reddetti; koşullar sağlanmamış olabilir.";
+    if (message.includes('timeout') || message.includes('ETIMEDOUT')) return "İşlem ağ yoğunluğu nedeniyle zaman aşımına uğradı.";
+    return "İşlem ağ hatası nedeniyle başarısız oldu, lütfen tekrar deneyin.";
+  }
+
+  /**
    * Dispatches immutable parameters onto the target L2/Core blockchain network.
    */
   public async triggerBorsaSwap(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Güvenli kriptografik bağlantı kanalı yapılandırılıyor...`);
+    this.emitLog('BLOCKCHAIN', 'INFO', `Blokzinciri ağ geçidi hazırlanıyor...`);
 
-    const hasNoKey = !this.privateKey || this.privateKey.includes('0x00000000') || this.privateKey === 'YOUR_PRIVATE_KEY';
-    const hasNoRpc = !this.rpcUrl || this.rpcUrl.includes('YOUR_API_KEY') || this.rpcUrl.includes('polygon-mainnet.g.alchemy.com');
-
-    // Run simulation if credentials are not configured or are placeholder keys
-    if (hasNoKey || hasNoRpc) {
-      this.emitLog('BLOCKCHAIN', 'WARNING', `Aktif Web3 özel anahtarı (private key) veya RPC ucu bulunamadı. Güvenli simülasyon modu başlatılıyor.`);
-      await new Promise((resolve) => setTimeout(resolve, 1400)); // Network simulation delay
+    // Yapılandırma eksikse güvenli simülasyonu başlat
+    if (!this.isRealMode) {
+      this.emitLog('BLOCKCHAIN', 'WARNING', `⚠️ TEST MODU: Geçerli cüzdan anahtarı bulunamadı. Simülasyon yapılıyor.`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       
       const mockTx = '0x' + crypto.randomBytes(32).toString('hex');
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[SİMÜLASYON] Zincir içi kanıt başarıyla sabitlendi.`);
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[SİMÜLASYON] Basım ve BorsaSwap işlemi onaylandı. İşlem Kodu (Hash): ${mockTx}`);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[DEMO_OK] Kanıt simüle edildi. Hash: ${mockTx}`);
 
-      return {
-        success: true,
-        txHash: mockTx,
-        simulated: true
-      };
+      return { success: true, txHash: mockTx, simulated: true };
     }
 
     let lastError: any = null;
     for (let i = 0; i < this.rpcEndpoints.length; i++) {
       const currentRpc = this.rpcEndpoints[i];
       try {
-        this.emitLog('BLOCKCHAIN', 'INFO', `Poligon ana ağına bağlantı kuruluyor [Endpoint ${i + 1}/${this.rpcEndpoints.length}]: ${currentRpc}`);
+        this.emitLog('BLOCKCHAIN', 'INFO', `Ağa bağlanılıyor [${i + 1}/${this.rpcEndpoints.length}]: ${currentRpc}`);
         
-        // Connect to node RPC
-        const provider = new ethers.providers.JsonRpcProvider(currentRpc);
+        const provider = new ethers.providers.JsonRpcProvider({
+          url: currentRpc,
+          timeout: 10000 // 502 hatalarını önlemek için zaman aşımı
+        });
         
         // Load and verify security keys
         const wallet = new ethers.Wallet(this.privateKey, provider);
-        const balance = await provider.getBalance(wallet.address);
+        const balance = await provider.getBalance(wallet.address).catch(() => ethers.BigNumber.from(0));
+        
+        if (balance.isZero() && this.isRealMode) {
+          this.emitLog('BLOCKCHAIN', 'ERROR', `Cüzdan Bakiyesi 0 POL. İşlem yapılamaz. Lütfen ${wallet.address} adresine POL gönderin.`);
+          return { success: false, txHash: '', simulated: false, error: 'Yetersiz bakiye' };
+        }
         this.emitLog('BLOCKCHAIN', 'INFO', `Sıcak cüzdan doğrulandı: ${wallet.address} | Bakiye: ${ethers.utils.formatEther(balance)} MATIC/POL`);
 
         // Check if contract is zero-address to trigger Direct Proof anchoring on-chain
-        const isZeroContract = !this.contractAddress || 
-                               this.contractAddress === '0x0000000000000000000000000000000000000000' ||
-                               this.contractAddress.toLowerCase() === '0x';
+        const isZeroContract = this.contractAddress === ethers.constants.AddressZero;
 
         if (isZeroContract) {
           this.emitLog('BLOCKCHAIN', 'INFO', `Akıllı kontrat adresi belirtilmedi. Yeşil karbon kanıtı doğrudan Polygon üzerinde mühürleniyor (Memo mod)...`);
@@ -135,14 +164,15 @@ export class BlockchainRouter {
         } else {
           // Contract execution
           const contract = new ethers.Contract(this.contractAddress, this.contractAbi, wallet);
-          const weiMultiplier = ethers.utils.parseEther(carbonGram.toFixed(18)); // Ensure compatibility with full 18 decimal places
+          // Veriyi kontratın beklediği birime (18 decimal) çevir
+          const amountWei = ethers.utils.parseUnits(carbonGram.toFixed(18), 18);
 
           this.emitLog('BLOCKCHAIN', 'INFO', `Temizlik kanıtı işlemi akıllı kontrat üzerinde başlatılıyor...`);
           
           let tx;
           try {
             this.emitLog('BLOCKCHAIN', 'INFO', `Deneme 1: mintAndSwap fonksiyonu çağrılıyor...`);
-            tx = await contract.mintAndSwap(weiMultiplier, proofHash, {
+            tx = await contract.mintAndSwap(amountWei, proofHash, {
               gasLimit: 150000
             });
           } catch (firstErr: any) {
@@ -159,7 +189,7 @@ export class BlockchainRouter {
             }
             
             // submitProof (bytes32 proofHash, uint256 amount)
-            tx = await contract.submitProof(bytes32Proof, weiMultiplier, {
+            tx = await contract.submitProof(bytes32Proof, amountWei, {
               gasLimit: 150000
             });
           }
@@ -177,16 +207,16 @@ export class BlockchainRouter {
         }
       } catch (e: any) {
         lastError = e;
-        this.emitLog('BLOCKCHAIN', 'WARNING', `EVM RPC ucu (${currentRpc}) bağlantı veya bakiye hatası verdi: ${e.message}. Alternatif RPC kapıları deneniyor...`);
+        this.emitLog('BLOCKCHAIN', 'WARNING', `RPC hatası (${currentRpc}): ${this.parseBlockchainError(e)}`);
       }
     }
 
-    this.emitLog('BLOCKCHAIN', 'ERROR', `Mevcut tüm EVM RPC sunucuları başarısız oldu. İşlem durduruldu: ${lastError?.message}`);
+    this.emitLog('BLOCKCHAIN', 'ERROR', `Mevcut tüm RPC sunucuları başarısız oldu. İşlem durduruldu.`);
     return {
       success: false,
       txHash: '',
       simulated: false,
-      error: lastError?.message || 'All RPC endpoints failed'
+      error: this.parseBlockchainError(lastError)
     };
   }
 
@@ -205,17 +235,13 @@ export class BlockchainRouter {
 
     // Özel anahtarın mevcut ve geçerli olduğunu kontrol et
     const pkey = this.privateKey;
-    const hasNoKey = !pkey || 
-                     pkey.includes('00000000') || 
-                     pkey === '0x' || 
-                     pkey.toLowerCase().includes('private_key') || 
-                     pkey.toLowerCase().includes('wallet');
 
-    if (hasNoKey || blockchainConfig.zeroGasActive) { // If zeroGasMode is active, always simulate
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[100% ÜCRETSİZ ZERO-GAS MODU] Cüzdanınızdan hiçbir gas ücreti (komisyon) harcanmadan otonom gelir transferi tetiklendi.`);
-      await new Promise(resolve => setTimeout(resolve, 850)); // Doğal gecikme simülasyonu
+    // Payout logic respects the zero-gas mode by defaulting to simulation
+    if (!this.isRealMode || blockchainConfig.zeroGasActive) {
+      this.emitLog('BLOCKCHAIN', 'INFO', `[DEMO_PAYOUT] Gelir yönlendirme simülasyonu başlatıldı...`);
+      await new Promise(resolve => setTimeout(resolve, 850));
       const mockTx = '0x' + crypto.randomBytes(32).toString('hex');
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[OTONOM_TRANSFER_OK] Alıcı kontrat ödemeyi yaptı. Gelir (${toAddress}) payout cüzdanınıza masrafsız olarak yönlendirildi! Real-Time Tx: ${mockTx}`);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[DEMO_SUCCESS] Transfer simüle edildi. Alıcı: ${toAddress}`);
       return {
         success: true,
         txHash: mockTx,
@@ -223,57 +249,47 @@ export class BlockchainRouter {
       };
     }
 
-    try {
-      const bscRpc = 'https://bsc-dataseed.binance.org/';
-      this.emitLog('BLOCKCHAIN', 'INFO', `BSC RPC ağına bağlantı kuruluyor: ${bscRpc}`);
+    const bscRpcEndpoints = ['https://bsc-dataseed.binance.org/', 'https://rpc.ankr.com/bsc', 'https://binance.llamarpc.com'];
+    let payoutError: any = null;
 
-      const provider = new ethers.providers.JsonRpcProvider(bscRpc);
-      const wallet = new ethers.Wallet(pkey, provider);
+    for (const bscRpc of bscRpcEndpoints) {
+      try {
+        this.emitLog('BLOCKCHAIN', 'INFO', `BSC ağına bağlanılıyor: ${bscRpc}`);
 
-      const balance = await provider.getBalance(wallet.address);
-      this.emitLog('BLOCKCHAIN', 'INFO', `BSC Cüzdanı Doğrulandı: ${wallet.address} | Bakiye: ${ethers.utils.formatEther(balance)} BNB`);
+        const provider = new ethers.providers.JsonRpcProvider({ url: bscRpc, timeout: 10000 });
+        const wallet = new ethers.Wallet(pkey, provider);
 
-      const amountWei = ethers.utils.parseEther(bnbAmountStr);
+        const balance = await provider.getBalance(wallet.address);
+        const amountWei = ethers.utils.parseEther(bnbAmountStr);
 
-      // Bakiye ve gas ücreti kontrolü
-      if (balance.lt(amountWei)) {
-        const errorMsg = `Yetersiz bakiye! Cüzdanda ${ethers.utils.formatEther(balance)} BNB var, transfer edilmek istenen: ${bnbAmountStr} BNB`;
-        this.emitLog('BLOCKCHAIN', 'ERROR', errorMsg);
+        // Bakiye ve gas için küçük bir marj bırak (safety buffer)
+        if (balance.lt(amountWei.add(ethers.utils.parseEther("0.0005")))) {
+          throw new Error("insufficient funds");
+        }
+
+        this.emitLog('BLOCKCHAIN', 'INFO', `${toAddress} cüzdanına ${bnbAmountStr} BNB gönderiliyor...`);
+        
+        const tx = await wallet.sendTransaction({
+          to: toAddress,
+          value: amountWei,
+          gasLimit: 21000
+        });
+
+        const receipt = await tx.wait();
+        this.emitLog('BLOCKCHAIN', 'SUCCESS', `Gelir gerçek BSC ağı üzerinden iletildi! Hash: ${tx.hash}`);
+
         return {
-          success: false,
-          txHash: '',
-          simulated: false,
-          error: errorMsg
+          success: true,
+          txHash: tx.hash,
+          simulated: false
         };
+      } catch (err: any) {
+        payoutError = err;
+        this.emitLog('BLOCKCHAIN', 'WARNING', `BSC RPC hatası (${bscRpc}): ${this.parseBlockchainError(err)}`);
+        continue;
       }
-
-      this.emitLog('BLOCKCHAIN', 'INFO', `${toAddress} cüzdanına ${bnbAmountStr} BNB gönderiliyor...`);
-      
-      const tx = await wallet.sendTransaction({
-        to: toAddress,
-        value: amountWei,
-        gasLimit: 21000,
-        gasPrice: await provider.getGasPrice()
-      });
-
-      this.emitLog('BLOCKCHAIN', 'INFO', `Sözleşme transfer işlemi yayınlandı. Onay bekleniyor... İşlem Kodu (Hash): ${tx.hash}`);
-      const receipt = await tx.wait();
-
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `Blok zinciri transferi onaylandı (Blok No: ${receipt.blockNumber}). Harcanan Gas: ${receipt.gasUsed.toString()}`);
-
-      return {
-        success: true,
-        txHash: tx.hash,
-        simulated: false
-      };
-    } catch (err: any) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', `BSC İşlem Sırasında Hata: ${err.message}`);
-      return {
-        success: false,
-        txHash: '',
-        simulated: false,
-        error: err.message
-      };
     }
+
+    return { success: false, txHash: '', simulated: false, error: this.parseBlockchainError(payoutError) };
   }
 }

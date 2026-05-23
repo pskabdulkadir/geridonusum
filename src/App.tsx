@@ -56,8 +56,8 @@ export default function App() {
     isCrawling: false,
     currentCrawlingUrl: "",
     readyToSell: [],
-    payoutWalletAddress: "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
-    zeroGasModeActive: true,
+    payoutWalletAddress: "", // Will be fetched from /api/stats
+    zeroGasModeActive: false, // Will be fetched from /api/stats
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);

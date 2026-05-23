@@ -7,13 +7,14 @@
  * @license SPDX-License-Identifier: Apache-2.0
  */
 
+import { blockchainConfig } from "./config.ts";
 import { GoogleGenAI } from "@google/genai";
 
 let aiInstance: GoogleGenAI | null = null;
 
 function getAiClient(): GoogleGenAI | null {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = blockchainConfig.geminiApiKey;
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
       console.warn("[GEMINI_AI] Warning: GEMINI_API_KEY environment variable is not defined or is placeholder. Falling back to sandbox analytics.");
       return null;

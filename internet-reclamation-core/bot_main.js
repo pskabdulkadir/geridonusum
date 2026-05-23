@@ -74,7 +74,7 @@ class InternetReclamationBot {
         this.miner = new ContentMiner();
 
         // Bind Logger to modules
-        this.miner.setLogger((module, msg) => {
+        this.miner.setLogger((module, level, msg) => { // Added level parameter
             console.log(COLORS.CYAN + `[MINER_AI] [${module}] ${msg}` + COLORS.RESET);
         });
 

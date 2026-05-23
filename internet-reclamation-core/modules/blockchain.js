@@ -34,7 +34,7 @@ class BlockchainRouter {
         }
 
         // Fallback to stable public Polygon Mainnet RPC if not configured or has placeholder
-        if (!rpc || rpc.includes('YOUR_API_KEY') || rpc.includes('polygon-mainnet.g.alchemy.com')) {
+        if (!rpc || rpc.includes('YOUR_API_KEY') || rpc.includes('polygon-mainnet.g.alchemy.com') || rpc.includes('YOUR_ALCHEMY_OR_INFURA_URL')) {
             rpc = 'https://polygon-rpc.com';
         }
 
