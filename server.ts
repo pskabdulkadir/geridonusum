@@ -24,9 +24,34 @@ import { BlockchainRouter } from "./server/blockchain.ts";
 import { generateEcoReport } from "./server/gemini.ts";
 import { blockchainConfig, dbConfig } from "./server/config.ts";
 
+// --- MONGODB MODELLERİ (GERÇEK VERİ İÇİN) ---
+const TransactionSchema = new mongoose.Schema({
+  url: String,
+  proofHash: String,
+  savedGrams: Number,
+  txHash: String,
+  simulated: Boolean,
+  timestamp: { type: Date, default: Date.now }
+});
+
+const ReadyToSellSchema = new mongoose.Schema({
+  id: String,
+  url: String,
+  proofHash: String,
+  co2SavingsGrams: Number,
+  extractedKeywords: [String],
+  reportSummary: String,
+  marketPriceUSD: Number,
+  isSold: { type: Boolean, default: false },
+  timestamp: { type: Date, default: Date.now }
+});
+
+const TransactionModel = mongoose.model("Transaction", TransactionSchema);
+const ReadyToSellModel = mongoose.model("ReadyToSell", ReadyToSellSchema);
+
 // UNHANDLED ERROR CATCHER - Prevent 502 by keeping process alive
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-  console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+  pushLog('SYSTEM', 'WARNING', `Beklenmedik Rejection: ${reason}`);
 });
 
 process.on('uncaughtException', (err: Error) => {
@@ -61,18 +86,14 @@ app.use(express.json());
 // Global Server State representing the autonomous "Internet Reclamation Core"
 const serverState = {
   crawlerLogs: [] as LogEntry[],
-  visitedUrls: new Set<string>(),
-  transactions: [] as TransactionRecord[],
-  
   pagesProcessed: 0,
   originalSizeTotal: 0,
   optimizedSizeTotal: 0,
   totalKiloBytesSaved: 0,
   totalCo2SavedGrams: 0,
-  blockchainProofsMinted: 0,
   isCrawling: false,
   currentCrawlingUrl: "",
-  readyToSell: [] as ReadyToSellItem[],
+  visitedUrls: new Set<string>(),
   payoutWalletAddress: blockchainConfig.payoutWallet, // Initialize from config
   zeroGasModeActive: blockchainConfig.zeroGasActive, // Initialize from config for zero-gas autonomous sales protocol
 };
@@ -154,14 +175,11 @@ async function runBotTaskRecursive() {
       // 1. Core Analytics tracking
       serverState.pagesProcessed++;
       const originalBytes = Buffer.byteLength(html);
-      serverState.originalSizeTotal += originalBytes;
-      serverState.visitedUrls.add(url);
-
-      pushLog('OPTIMIZER', 'INFO', `Düğüm verileri taranıyor... Orijinal yoğunluk: ${(originalBytes / 1024).toFixed(2)} KB.`);
-
+      
       // 2. Perform HTML formatting optimizations (comments scrubbing, whitespaces compacting)
       const optimizedHtml = mainOptimizer.optimizeHtml(html);
       const optimizedBytes = Buffer.byteLength(optimizedHtml);
+      serverState.originalSizeTotal += originalBytes;
       serverState.optimizedSizeTotal += optimizedBytes;
 
       const efficiencyGain = ((1 - (optimizedBytes / originalBytes)) * 100).toFixed(1);
@@ -182,7 +200,6 @@ async function runBotTaskRecursive() {
       
       if (metric.co2SavingsGrams > gasPreservationThresholdGrams) {
         if (serverState.zeroGasModeActive) {
-          // Zero-Gas Autonomous Sales Protocol: Do not use PRIVATE_KEY. List to READY_TO_SELL database!
           const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
           const calculatedPrice = parseFloat((Math.max(5.00, metric.co2SavingsGrams * 2.5) + (Math.random() * 2)).toFixed(2));
           
@@ -198,10 +215,8 @@ async function runBotTaskRecursive() {
             timestamp: new Date().toISOString()
           };
           
-          serverState.readyToSell.unshift(newItem);
-          if (serverState.readyToSell.length > 50) {
-            serverState.readyToSell.pop();
-          }
+          // MongoDB'ye Kaydet (Kalıcı Satış Havuzu)
+          await ReadyToSellModel.create(newItem);
           
           pushLog('AI', 'SUCCESS', `[READY_TO_SELL] Veri paketi yapay zeka tarafından süzülüp READY_TO_SELL portfolyosuna eklendi! Fiyat: $${calculatedPrice}`);
           pushLog('BLOCKCHAIN', 'INFO', `Sıfır-Gas Satış Modu Aktif. Cüzdan gas harcaması yapılmadı, alıcının sözleşmeye ödeme yapması bekleniyor.`);
@@ -211,20 +226,13 @@ async function runBotTaskRecursive() {
           const blockResult = await mainBlockchain.triggerBorsaSwap(metric.co2SavingsGrams, proofHash);
           
           if (blockResult.success) {
-            serverState.blockchainProofsMinted++;
-            const newTxList: TransactionRecord = {
+            await TransactionModel.create({
               url,
               proofHash,
               savedGrams: metric.co2SavingsGrams,
               txHash: blockResult.txHash,
               simulated: blockResult.simulated,
-              timestamp: new Date().toISOString()
-            };
-            serverState.transactions.unshift(newTxList); // Prepend for fresh view
-            
-            if (serverState.transactions.length > 50) {
-              serverState.transactions.pop();
-            }
+            });
           }
         }
       } else {
@@ -253,20 +261,23 @@ pushLog('SYSTEM', 'INFO', 'İnternet Geri Kazanım Komut Arayüzü hazır ve çe
 /**
  * Retrieve system state and performance metrics
  */
-app.get("/api/stats", (req, res) => {
+app.get("/api/stats", async (req, res) => {
   try {
+    const readyToSell = await ReadyToSellModel.find().sort({ timestamp: -1 }).limit(50);
+    const transactions = await TransactionModel.find().sort({ timestamp: -1 }).limit(50);
+
     res.json({
       pagesProcessed: serverState.pagesProcessed,
       originalSizeTotal: serverState.originalSizeTotal,
       optimizedSizeTotal: serverState.optimizedSizeTotal,
-      totalKiloBytesSaved: serverState.totalKiloBytesSaved,
+      totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      blockchainProofsMinted: serverState.blockchainProofsMinted,
-      visitedUrls: Array.from(serverState.visitedUrls || []),
-      transactions: serverState.transactions || [],
+      blockchainProofsMinted: transactions.length,
+      transactions: transactions,
+      visitedUrls: Array.from(serverState.visitedUrls),
       isCrawling: serverState.isCrawling,
       currentCrawlingUrl: serverState.currentCrawlingUrl,
-      readyToSell: serverState.readyToSell || [],
+      readyToSell: readyToSell,
       payoutWalletAddress: serverState.payoutWalletAddress,
       zeroGasModeActive: serverState.zeroGasModeActive,
     } as CoreStats);
@@ -301,7 +312,7 @@ app.post("/api/payout-config", (req, res) => {
  */
 app.post("/api/simulate-purchase", async (req, res) => {
   const { itemId } = req.body;
-  const item = serverState.readyToSell.find(i => i.id === itemId);
+  const item = await ReadyToSellModel.findOne({ id: itemId });
   
   if (!item) {
     return res.status(404).json({ error: "Veri paketi bulunamadı." });
@@ -332,8 +343,7 @@ app.post("/api/simulate-purchase", async (req, res) => {
   };
   
   if (txResult.success) {
-    serverState.transactions.unshift(record);
-    serverState.blockchainProofsMinted++;
+    await TransactionModel.create(record);
 
     if (txResult.simulated) {
       pushLog('BLOCKCHAIN', 'SUCCESS', `[SIFIR_KOMISYON_ODEMESI] 0x71C7656EC7ab88b098defB751B7401B5f6d8976F kontratına $${item.marketPriceUSD.toFixed(2)} USDT yatırıldı!`);
@@ -347,7 +357,7 @@ app.post("/api/simulate-purchase", async (req, res) => {
     res.json({ success: true, item, transaction: record });
   } else {
     // Reverse status so the user can re-try after funding or adding key
-    item.isSold = false;
+    await ReadyToSellModel.updateOne({ id: itemId }, { isSold: false });
     pushLog('BLOCKCHAIN', 'ERROR', `Blockchain payouts transferi gerçekleştirilemedi: ${txResult.error}`);
     res.status(500).json({ error: txResult.error || "Blockchain payout transaction failed." });
   }

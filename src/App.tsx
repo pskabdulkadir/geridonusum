@@ -73,12 +73,10 @@ export default function App() {
   const [walletSaveSuccess, setWalletSaveSuccess] = useState<boolean>(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null);
   const [autoSalesActive, setAutoSalesActive] = useState<boolean>(true);
-
-  // Live earnings accumulator
-  const [totalEarnings, setTotalEarnings] = useState<number>(() => {
-    const saved = localStorage.getItem("eco_total_earnings");
-    return saved ? parseFloat(saved) : 0.00; // Default realistic visual startup earnings starting from zero
-  });
+  
+  // Gerçek kazanç verisi artık doğrudan sunucu istatistiklerinden (stats.totalEarnings) gelmeli
+  // stats state'i içine totalEarnings eklenmelidir.
+  const totalEarnings = stats.readyToSell?.filter(item => item.isSold).reduce((sum, item) => sum + item.marketPriceUSD, 0) || 0;
 
   // Automatically process unsold inventory items when Auto-sales mode is enabled
   useEffect(() => {

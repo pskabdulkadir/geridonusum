@@ -55,10 +55,8 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // Sistemin gerçek ağa bağlanabilirliğini doğrula
-    this.isRealMode = !!(this.privateKey && this.privateKey.length >= 64 && 
-                        !this.privateKey.includes('00000000') && !this.privateKey.includes('YOUR_PRIVATE_KEY') &&
-                        this.rpcUrl && !this.rpcUrl.includes('YOUR_API_KEY') && !this.rpcUrl.includes('YOUR_ALCHEMY_OR_INFURA_URL'));
+    // ÜRETİM MODU KONTROLÜ: Network mode 'mainnet' ise gerçek işlemleri zorunlu kılar.
+    this.isRealMode = blockchainConfig.networkMode === 'mainnet';
   }
 
   public registerLogger(cb: typeof this.logCallback) {
@@ -103,15 +101,11 @@ export class BlockchainRouter {
   public async triggerBorsaSwap(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
     this.emitLog('BLOCKCHAIN', 'INFO', `Blokzinciri ağ geçidi hazırlanıyor...`);
 
-    // Yapılandırma eksikse güvenli simülasyonu başlat
-    if (!this.isRealMode) {
-      this.emitLog('BLOCKCHAIN', 'WARNING', `⚠️ TEST MODU: Geçerli cüzdan anahtarı bulunamadı. Simülasyon yapılıyor.`);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      const mockTx = '0x' + crypto.randomBytes(32).toString('hex');
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[DEMO_OK] Kanıt simüle edildi. Hash: ${mockTx}`);
-
-      return { success: true, txHash: mockTx, simulated: true };
+    // Cüzdan kontrolü
+    if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
+      const errMsg = "HATA: Üretim modunda geçerli bir PRIVATE_KEY (Özel Anahtar) gereklidir. İşlem durduruldu.";
+      this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
+      return { success: false, txHash: '', simulated: false, error: errMsg };
     }
 
     let lastError: any = null;
@@ -236,17 +230,10 @@ export class BlockchainRouter {
     // Özel anahtarın mevcut ve geçerli olduğunu kontrol et
     const pkey = this.privateKey;
 
-    // Payout logic respects the zero-gas mode by defaulting to simulation
-    if (!this.isRealMode || blockchainConfig.zeroGasActive) {
-      this.emitLog('BLOCKCHAIN', 'INFO', `[DEMO_PAYOUT] Gelir yönlendirme simülasyonu başlatıldı...`);
-      await new Promise(resolve => setTimeout(resolve, 850));
-      const mockTx = '0x' + crypto.randomBytes(32).toString('hex');
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[DEMO_SUCCESS] Transfer simüle edildi. Alıcı: ${toAddress}`);
-      return {
-        success: true,
-        txHash: mockTx,
-        simulated: true
-      };
+    if (!pkey || pkey.includes('YOUR_PRIVATE_KEY')) {
+      const errMsg = "HATA: Gerçek gelir transferi için geçerli bir PRIVATE_KEY tanımlanmalıdır.";
+      this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
+      return { success: false, txHash: '', simulated: false, error: errMsg };
     }
 
     const bscRpcEndpoints = ['https://bsc-dataseed.binance.org/', 'https://rpc.ankr.com/bsc', 'https://binance.llamarpc.com'];

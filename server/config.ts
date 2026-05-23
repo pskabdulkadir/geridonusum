@@ -14,6 +14,7 @@ export const blockchainConfig = {
     rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || 'https://polygon-rpc.com',
     privateKey: process.env.PRIVATE_KEY || process.env.INCOME_DISTRIBUTION_WALLET || '',
     zeroGasActive: process.env.ZERO_GAS_SELLER_NODE === 'true',
+    networkMode: process.env.NETWORK_MODE || 'mainnet',
     sharedPoolEnabled: process.env.SHARED_DISTRIBUTION_POOL_ENABLED === 'true',
     batchMining: process.env.BATCH_MINING === 'true',
 };
