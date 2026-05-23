@@ -1,0 +1,68 @@
+/**
+ * @file types.ts
+ * @description Joint domain data models, structures, and schemas shared between
+ * backend automation systems and the cyber-terminal frontend dashboard.
+ * 
+ * @author Senior Software Architect
+ * @license SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface TransactionRecord {
+  url: string;
+  proofHash: string;
+  savedGrams: number;
+  txHash: string;
+  simulated: boolean;
+  timestamp: string;
+}
+
+export interface ReadyToSellItem {
+  id: string;
+  url: string;
+  proofHash: string;
+  co2SavingsGrams: number;
+  extractedKeywords: string[];
+  reportSummary: string;
+  marketPriceUSD: number;
+  isSold: boolean;
+  timestamp: string;
+}
+
+export interface CoreStats {
+  pagesProcessed: number;
+  originalSizeTotal: number;
+  optimizedSizeTotal: number;
+  totalKiloBytesSaved: number;
+  totalCo2SavedGrams: number;
+  blockchainProofsMinted: number;
+  visitedUrls: string[];
+  transactions: TransactionRecord[];
+  isCrawling: boolean;
+  currentCrawlingUrl: string;
+  readyToSell: ReadyToSellItem[];
+  payoutWalletAddress: string;
+  zeroGasModeActive: boolean;
+}
+
+export interface OptimizationResult {
+  url: string;
+  originalSize: number;
+  optimizedSize: number;
+  bytesSaved: number;
+  co2SavingsGrams: number;
+  efficiencyGainPct: number;
+  proofHash: string;
+  optimizedCode: string;
+  originalCode: string;
+  txHash: string;
+  simulated: boolean;
+  aiReport?: string; // Optional Gemini-powered semantic review
+}
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI';
+  level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE';
+  message: string;
+}

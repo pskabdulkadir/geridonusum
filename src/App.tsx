@@ -1,0 +1,1348 @@
+/**
+ * @file App.tsx
+ * @description State-of-the-art interactive Web3 / GreenTech telemetry terminal
+ * for the Internet Reclamation Core. Coordinates real-time server logs, automated crawling 
+ * metrics, custom URL optimization pipelines, and Gemini-powered code refactoring reports.
+ * 
+ * @author Senior Software Architect & Cybersecurity Specialist
+ * @license SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useRef, FormEvent } from "react";
+import { 
+  Terminal, 
+  Globe, 
+  Cpu, 
+  Coins, 
+  Activity, 
+  Play, 
+  Square, 
+  Search, 
+  Sparkles, 
+  TrendingDown, 
+  ExternalLink, 
+  Layers, 
+  Database, 
+  Leaf, 
+  Info, 
+  CheckCircle2, 
+  AlertTriangle,
+  Flame,
+  Code
+} from "lucide-react";
+
+import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
+
+const crawlerSeeds = [
+  "https://wikipedia.org",
+  "https://html.spec.whatwg.org",
+  "https://www.w3.org"
+];
+
+export default function App() {
+  // Navigation Tabs
+  const [activeTab, setActiveTab] = useState<"bot" | "manual" | "marketplace" | "blueprint">("bot");
+
+  // Server state data
+  const [stats, setStats] = useState<CoreStats>({
+    pagesProcessed: 0,
+    originalSizeTotal: 0,
+    optimizedSizeTotal: 0,
+    totalKiloBytesSaved: 0,
+    totalCo2SavedGrams: 0,
+    blockchainProofsMinted: 0,
+    visitedUrls: [],
+    transactions: [],
+    isCrawling: false,
+    currentCrawlingUrl: "",
+    readyToSell: [],
+    payoutWalletAddress: "0x89205AbaE846560FDeB791CfFEE17482D2Ec739d",
+    zeroGasModeActive: true,
+  });
+
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logSearch, setLogSearch] = useState<string>("");
+  const [targetUrl, setTargetUrl] = useState<string>("https://www.w3.org");
+  const [isOptimizingTarget, setIsOptimizingTarget] = useState<boolean>(false);
+  const [optResult, setOptResult] = useState<OptimizationResult | null>(null);
+  const [targetError, setTargetError] = useState<string>("");
+
+  // Wallet and zero-gas state editors
+  const [walletInput, setWalletInput] = useState<string>("");
+  const [isUpdatingWallet, setIsUpdatingWallet] = useState<boolean>(false);
+  const [walletSaveSuccess, setWalletSaveSuccess] = useState<boolean>(false);
+  const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null);
+  const [autoSalesActive, setAutoSalesActive] = useState<boolean>(true);
+
+  // Live earnings accumulator
+  const [totalEarnings, setTotalEarnings] = useState<number>(() => {
+    const saved = localStorage.getItem("eco_total_earnings");
+    return saved ? parseFloat(saved) : 0.00; // Default realistic visual startup earnings starting from zero
+  });
+
+  // Automatically process unsold inventory items when Auto-sales mode is enabled
+  useEffect(() => {
+    if (!autoSalesActive) return;
+
+    const triggerAutoPurchase = async () => {
+      // Do nothing if there's already an active transaction in progress
+      if (purchaseInProgress !== null) return;
+      
+      const nextUnsold = stats.readyToSell?.find(item => !item.isSold);
+      if (nextUnsold) {
+        await handleSimulatePurchase(nextUnsold.id);
+      }
+    };
+
+    const intervalId = setInterval(triggerAutoPurchase, 2000);
+    return () => clearInterval(intervalId);
+  }, [autoSalesActive, stats.readyToSell, purchaseInProgress]);
+
+  // Sync state values to form inputs
+  useEffect(() => {
+    if (stats.payoutWalletAddress && !walletInput) {
+      setWalletInput(stats.payoutWalletAddress);
+    }
+  }, [stats.payoutWalletAddress]);
+
+  // Refs for auto-scroll logging window
+  const terminalEndRef = useRef<HTMLDivElement>(null);
+
+  // Poll server state API for dynamic dashboard synchronization
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("/api/stats");
+        const contentType = response.headers.get("content-type");
+        if (response.ok && contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          setStats(data);
+        } else {
+          const isHtml = contentType && contentType.includes("text/html");
+          console.warn("[FETCH] Received non-JSON or stale response from server", {
+            status: response.status,
+            contentType,
+            isHtml
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch statistics from backend:", err);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Connect Server-Sent Events (SSE) for raw cybernetic log streaming
+  useEffect(() => {
+    const sse = new EventSource("/api/stream-logs");
+
+    sse.onmessage = (event) => {
+      const newLog: LogEntry = JSON.parse(event.data);
+      setLogs((prev) => {
+        // Prevent duplicate entries due to SSE reconnections
+        if (prev.some((log) => log.id === newLog.id)) {
+          return prev;
+        }
+        const updated = [...prev, newLog];
+        // Throttle client memory state size
+        return updated.slice(-150);
+      });
+    };
+
+    return () => {
+      sse.close();
+    };
+  }, []);
+
+  // Ensure terminal logs autoscroll
+  useEffect(() => {
+    if (terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs]);
+
+  // Handle Crawl Bot start signal emission
+  const startCrawlBot = async () => {
+    try {
+      await fetch("/api/crawl/start", { method: "POST" });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Handle Crawl Bot stop signal emission
+  const stopCrawlBot = async () => {
+    try {
+      await fetch("/api/crawl/stop", { method: "POST" });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Trigger dedicated URL sweep with detailed report compilation
+  const handleTacticalOptimize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUrl) return;
+
+    setIsOptimizingTarget(true);
+    setTargetError("");
+    setOptResult(null);
+
+    try {
+      const res = await fetch("/api/optimize-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl }),
+      });
+
+      if (!res.ok) {
+        const errPayload = await res.json();
+        throw new Error(errPayload.error || "Tactical sweep pipeline failed.");
+      }
+
+      const outcome: OptimizationResult = await res.json();
+      setOptResult(outcome);
+    } catch (err: any) {
+      setTargetError(err.message || "Failed to establish network pipeline.");
+    } finally {
+      setIsOptimizingTarget(false);
+    }
+  };
+
+  // Save payout cüzdan and gas mode settings
+  const handleSavePayoutSettings = async (e: React.FormEvent, customZeroGas?: boolean) => {
+    if (e) e.preventDefault();
+    setIsUpdatingWallet(true);
+    setWalletSaveSuccess(false);
+    
+    try {
+      const activeZeroGas = typeof customZeroGas === "boolean" ? customZeroGas : stats.zeroGasModeActive;
+      const res = await fetch("/api/payout-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payoutWalletAddress: walletInput,
+          zeroGasModeActive: activeZeroGas
+        })
+      });
+      if (res.ok) {
+        setWalletSaveSuccess(true);
+        setTimeout(() => setWalletSaveSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to update payout configuration:", err);
+    } finally {
+      setIsUpdatingWallet(false);
+    }
+  };
+
+  // Toggle zero gas active directly
+  const handleToggleZeroGas = async (val: boolean) => {
+    setStats(prev => ({ ...prev, zeroGasModeActive: val }));
+    // Immediately save backend config
+    setIsUpdatingWallet(true);
+    try {
+      await fetch("/api/payout-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payoutWalletAddress: walletInput,
+          zeroGasModeActive: val
+        })
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdatingWallet(false);
+    }
+  };
+
+  // Simulate a buyer purchasing a clean carbon data package
+  const handleSimulatePurchase = async (itemId: string) => {
+    setPurchaseInProgress(itemId);
+    try {
+      // Find the price before we mark it as sold
+      const matchedItem = stats.readyToSell.find(i => i.id === itemId);
+      const itemPrice = matchedItem ? matchedItem.marketPriceUSD : 10.00;
+
+      const res = await fetch("/api/simulate-purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId })
+      });
+      if (res.ok) {
+        // Update earnings accumulator
+        setTotalEarnings(prev => {
+          const updated = prev + itemPrice;
+          localStorage.setItem("eco_total_earnings", updated.toString());
+          return updated;
+        });
+
+        // Trigger quick local stats update
+        const statsRes = await fetch("/api/stats");
+        if (statsRes.ok) {
+          const freshData = await statsRes.json();
+          setStats(freshData);
+        }
+      }
+    } catch (err) {
+      console.error("Simulated purchase action failed:", err);
+    } finally {
+      setPurchaseInProgress(null);
+    }
+  };
+
+  // Log module custom styling mapper
+  const getLogStyle = (module: string, level: string) => {
+    let textAndBg = "text-slate-300";
+    if (module === "SYSTEM") textAndBg = "text-cyan-400";
+    else if (module === "CRAWLER") textAndBg = "text-sky-300";
+    else if (module === "OPTIMIZER") textAndBg = "text-emerald-400";
+    else if (module === "BLOCKCHAIN") textAndBg = "text-pink-400";
+    else if (module === "AI") textAndBg = "text-amber-300";
+
+    if (level === "ERROR") return "text-red-400 font-semibold border-l-2 border-red-500 pl-1";
+    if (level === "WARNING") return "text-yellow-400 font-medium";
+    if (level === "ANALYZE") return "text-violet-400 font-medium";
+
+    return textAndBg;
+  };
+
+  // Filter logs based on search criteria
+  const filteredLogs = logs.filter((log) => {
+    if (!logSearch) return true;
+    const query = logSearch.toLowerCase();
+    return (
+      log.message.toLowerCase().includes(query) ||
+      log.module.toLowerCase().includes(query) ||
+      log.level.toLowerCase().includes(query)
+    );
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950 p-4 md:p-6 lg:p-8 flex flex-col justify-between">
+      
+      {/* HEADER SECTION */}
+      <header className="border border-slate-800 bg-slate-900/60 backdrop-blur-md rounded-2xl p-5 mb-6 flex flex-col md:flex-row md:items-center md:justify-between shadow-2xl relative overflow-hidden">
+        {/* Futuristic glowing geometric accents */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl"></div>
+        <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-pink-500/5 rounded-full blur-3xl"></div>
+
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-cyan-950 border border-cyan-800/60 rounded-xl relative">
+            <Cpu className="w-8 h-8 text-cyan-400 animate-pulse-slow" />
+            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-slate-950"></div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-xl md:text-2xl font-bold tracking-tight text-white uppercase">
+                İnternet Geri Kazanım Çekirdeği
+              </h1>
+              <span className="text-[10px] font-mono tracking-wider bg-slate-800 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/20">
+                v1.0.0
+              </span>
+            </div>
+            <p className="text-slate-400 text-xs md:text-sm mt-0.5 max-w-xl">
+              Otonom karanlık veri tarama botu ve EVM zincir içi kod enerji optimizasyon platformu.
+            </p>
+          </div>
+        </div>
+
+        {/* Dynamic State Banner */}
+        <div className="mt-4 md:mt-0 flex items-center gap-3 bg-slate-950/60 px-4 py-3 rounded-xl border border-slate-800">
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Bot Aktivite Modülü</span>
+            <span className="text-xs font-mono font-medium text-slate-300">
+              {stats.isCrawling ? "HEDEF SEKTÖRLER TARANIYOR..." : "SİSTEM COOLDOWN / HAZIR"}
+            </span>
+          </div>
+          <div className="relative flex h-3 w-3">
+            {stats.isCrawling ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400"></span>
+              </>
+            ) : (
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-slate-600"></span>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* DYNAMIC METRIC CARDS GRID (BENTO SYSTEM) */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Card 1: Pages Scan Rate */}
+        <div className="bg-slate-900/50 border border-slate-800 hover:border-cyan-500/30 transition-all rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-lg group relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/5 rounded-full blur-xl transition-all group-hover:bg-cyan-500/10"></div>
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono uppercase tracking-wider">
+            <span>Temizlenen Sektörler</span>
+            <Globe className="w-4.5 h-4.5 text-cyan-500" />
+          </div>
+          <div className="mt-4">
+            <div className="text-2xl md:text-3xl font-display font-medium text-white tracking-tight">
+              {stats.pagesProcessed}
+            </div>
+            <p className="text-slate-500 text-[10px] mt-1">Taranan ve dizine eklenen toplam aktif URL</p>
+          </div>
+        </div>
+
+        {/* Card 2: Shredded Dark Data */}
+        <div className="bg-slate-900/50 border border-slate-800 hover:border-emerald-500/30 transition-all rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-lg group relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl transition-all group-hover:bg-emerald-500/10"></div>
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono uppercase tracking-wider">
+            <span>Geri Kazanılan Veri</span>
+            <Layers className="w-4.5 h-4.5 text-emerald-500" />
+          </div>
+          <div className="mt-4">
+            <div className="text-2xl md:text-3xl font-display font-medium text-emerald-400 tracking-tight">
+              {stats.totalKiloBytesSaved ? stats.totalKiloBytesSaved.toFixed(2) : "0.00"} <span className="text-xs font-mono text-slate-400">KB</span>
+            </div>
+            <p className="text-slate-500 text-[10px] mt-1">Gereksiz kod satırları ve yorum blokları</p>
+          </div>
+        </div>
+
+        {/* Card 3: Net Offset Savings */}
+        <div className="bg-slate-900/50 border border-slate-800 hover:border-amber-500/30 transition-all rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-lg group relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl transition-all group-hover:bg-amber-500/10"></div>
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono uppercase tracking-wider">
+            <span>Net Karbon Tasarrufu</span>
+            <Leaf className="w-4.5 h-4.5 text-amber-500" />
+          </div>
+          <div className="mt-4">
+            <div className="text-2xl md:text-3xl font-display font-medium text-amber-500 tracking-tight">
+              {stats.totalCo2SavedGrams ? stats.totalCo2SavedGrams.toFixed(4) : "0.0000"} <span className="text-xs font-mono text-slate-400">g CO₂</span>
+            </div>
+            <p className="text-slate-500 text-[10px] mt-1">Erişimi önlenen tahmini karbon emisyonu</p>
+          </div>
+        </div>
+
+        {/* Card 4: Web3 proofs */}
+        <div className="bg-slate-900/50 border border-slate-800 hover:border-pink-500/30 transition-all rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-lg group relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-pink-500/5 rounded-full blur-xl transition-all group-hover:bg-pink-500/10"></div>
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono uppercase tracking-wider">
+            <span>Basılan Kanıtlar</span>
+            <Coins className="w-4.5 h-4.5 text-pink-500" />
+          </div>
+          <div className="mt-4">
+            <div className="text-2xl md:text-3xl font-display font-medium text-pink-400 tracking-tight">
+              {stats.blockchainProofsMinted} <span className="text-xs font-mono text-slate-400">İşlem</span>
+            </div>
+            <p className="text-slate-500 text-[10px] mt-1">L2 üzerinde gerçekleşen PoC işlemleri</p>
+          </div>
+        </div>
+      </section>
+
+      {/* CORE FUNCTION SELECTOR TABS */}
+      <div className="flex border-b border-slate-800 mb-6 font-mono text-xs overflow-x-auto whitespace-nowrap">
+        <button
+          onClick={() => setActiveTab("bot")}
+          className={`px-4 py-3 font-medium flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === "bot" 
+              ? "border-cyan-400 text-cyan-400 bg-cyan-950/10" 
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          OTONOM TARAMA PANELİ
+        </button>
+        <button
+          onClick={() => setActiveTab("manual")}
+          className={`px-4 py-3 font-medium flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === "manual" 
+              ? "border-emerald-400 text-emerald-400 bg-emerald-950/10" 
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          HEDEFLİ EKO-OPTİMİZASYON
+        </button>
+        <button
+          onClick={() => setActiveTab("marketplace")}
+          className={`px-4 py-3 font-medium flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === "marketplace" 
+              ? "border-amber-400 text-amber-400 bg-amber-950/10" 
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Coins className="w-4 h-4 text-amber-400" />
+          OTONOM PAZARYERİ & GELİR
+        </button>
+        <button
+          onClick={() => setActiveTab("blueprint")}
+          className={`px-4 py-3 font-medium flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === "blueprint" 
+              ? "border-pink-400 text-pink-400 bg-pink-950/10" 
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          MİKRO-ÇEKİRDEK YAPILANDIRMASI
+        </button>
+      </div>
+
+      {/* ACTIVE TAB WORKING CANVAS */}
+      <main className="mb-6 flex-grow">
+        
+        {/* TAB 1: AUTONOMOUS SWEEP ENGINE */}
+        {activeTab === "bot" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Control Panel Column */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-4 flex items-center gap-2">
+                  <Activity className="w-4.5 h-4.5 text-cyan-400" />
+                  Ağ Tarayıcı Çekirdek Kontrolü
+                </h3>
+
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                  Yinelemeli giriş (seed) düğümlerini ayrıştıran arka plan tarayıcılarını tetikler. Belirli karbon tasarruf eşiğine ulaşıldığında temizlik kayıtları anında blok zincirine işlenir.
+                </p>
+
+                {/* State Meter */}
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-5 font-mono text-xs">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-slate-500 uppercase text-[10px]">Ekosistem Tarama Motoru</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] ${stats.isCrawling ? "bg-cyan-950 text-cyan-400 border border-cyan-500/20" : "bg-slate-800 text-slate-400"}`}>
+                      {stats.isCrawling ? "ÇALIŞIYOR" : "BEKLEMEDE"}
+                    </span>
+                  </div>
+
+                  {stats.isCrawling ? (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-slate-400 mb-1">
+                          <span>Sektör düğümü taranıyor:</span>
+                        </div>
+                        <div className="text-white font-medium break-all text-[11px] bg-slate-900/50 p-2 rounded border border-slate-800/60 font-mono">
+                          {stats.currentCrawlingUrl || "Sektörler taranıyor..."}
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-cyan-400 h-full w-2/3 animate-[pulse_1.5s_infinite] rounded-full"></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 text-center py-2 italic font-sans animate-pulse">
+                      Sistem, manuel çalışma komutu veya otomatik planlanmış sinyal bekliyor.
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={startCrawlBot}
+                    disabled={stats.isCrawling}
+                    className="w-full py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-950/50 transition-all font-mono text-xs font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-30"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    MOTORU BAŞLAT
+                  </button>
+
+                  <button
+                    onClick={stopCrawlBot}
+                    disabled={!stats.isCrawling}
+                    className="w-full py-2.5 rounded-xl border border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-all font-mono text-xs font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-30"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    BEKLEME MODU
+                  </button>
+                </div>
+              </div>
+
+              {/* Seed Node Directory */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-3 flex items-center gap-2">
+                  <Layers className="w-4.5 h-4.5 text-cyan-400" />
+                  Birincil Sektör Girişleri (Seeds)
+                </h3>
+                <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                  Mevcut şebeke kazanımı segmentinin başlangıç düğümleri:
+                </p>
+                <div className="space-y-2 font-mono text-xs">
+                  {crawlerSeeds.map((seed, id) => (
+                    <div key={id} className="flex items-center justify-between border border-slate-800/60 bg-slate-950/40 p-2.5 rounded-xl">
+                      <span className="text-slate-300 break-all">{seed}</span>
+                      <span className="text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">SECTOR_{id}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Blockchain transactions */}
+            <div className="lg:col-span-7 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+              <div>
+                <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-4 flex items-center gap-2">
+                  <Coins className="w-4.5 h-4.5 text-pink-400" />
+                  Zincir İçi Karbon Kayıt Defteri
+                </h3>
+
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                  Güvenli karbon dengeleme damgalarını (PoC) temsil eden anlık blok zinciri işlemleri. Bu işlemler, doğrudan zincir üzerinde yeşil kredi takaslarını doğrular.
+                </p>
+
+                {stats.transactions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-slate-500 py-12 text-xs font-mono">
+                    <Database className="w-12 h-12 text-slate-800 mb-3" />
+                    Henüz güncel sistemde kayıtlı işlem bulunmuyor.
+                    {stats.isCrawling && <p className="text-cyan-400 animate-pulse mt-1">Gelen blok onayları dinleniyor...</p>}
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    {stats.transactions.map((tx, idx) => (
+                      <div key={idx} className="bg-slate-950 border border-slate-800/60 rounded-xl p-3 font-mono text-[11px] flex flex-col gap-2 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-emerald-400 font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            BASILDI VE İŞLENDİ
+                          </span>
+                          <span className="text-slate-500 text-[10px]">
+                            {new Date(tx.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-400">
+                          <div>
+                            <span className="text-slate-500 uppercase text-[9px] block">Dengeleme Hacmi</span>
+                            <span className="text-amber-400 text-xs font-semibold">{tx.savedGrams.toFixed(4)} g CO₂</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 uppercase text-[9px] block text-right">Doğrulama Damgası</span>
+                            <span className="text-slate-300 text-[10px] block text-right font-mono truncate max-w-full">
+                              {tx.proofHash}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-slate-900 pt-2 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1 max-w-[70%]">
+                            <Globe className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span className="truncate">{tx.url}</span>
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {tx.simulated ? (
+                              <span className="text-[9px] text-emerald-400 font-mono tracking-widest bg-emerald-950/20 border border-emerald-500/20 px-1 py-0.2 rounded">
+                                OTONOM_TRANSFER_OK
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-cyan-400 font-mono tracking-widest bg-cyan-950/20 border border-cyan-500/20 px-1 py-0.2 rounded">
+                                POLYGON_MAINNET
+                              </span>
+                            )}
+                            <a 
+                              href={`https://polygonscan.com/tx/${tx.txHash}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-cyan-400 hover:text-cyan-300 transition-all hover:scale-105"
+                              title="İşlem doğrulamasını incele"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-800/80 mt-5 pt-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>Sözleşme Adresi: 0x...0000</span>
+                <span>Platform: Polygon Mumbai / L2 POS Korumalı</span>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 2: MANUAL URL SWEEPER SANDBOX */}
+        {activeTab === "manual" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Input and analytics panel */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-3 flex items-center gap-2">
+                  <Sparkles className="w-4.5 h-4.5 text-emerald-400" />
+                  Hedefli Kod Temizleyici
+                </h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                  Aşağıya herhangi bir özel URL adresi girin. Kod optimizasyon aracı HTML kodunu indirecek, biçimlendirecek, gereksiz yorum satırlarını silecek ve enerji analizleriyle birlikte canlı bir Gemini raporu sunacaktır.
+                </p>
+
+                <form onSubmit={handleTacticalOptimize} className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Hedef Web Sektör Adresi</label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={targetUrl}
+                        onChange={(e) => setTargetUrl(e.target.value)}
+                        placeholder="https://example.com"
+                        required
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/60 rounded-xl px-4.5 py-3 text-xs text-white font-mono placeholder:text-slate-700 outline-none transition-all"
+                      />
+                      <Globe className="absolute right-3.5 top-3.5 w-4.5 h-4.5 text-slate-600" />
+                    </div>
+                  </div>
+
+                  {targetError && (
+                    <div className="bg-red-950/20 border border-red-900/40 text-red-400 p-3 rounded-xl text-xs flex gap-2 font-mono leading-relaxed">
+                      <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
+                      <div>
+                        {targetError}
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Sunucu barındırma parametrelerini doğrulayın ve alan adının herkese açık olduğundan emin olun.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isOptimizingTarget}
+                    className="w-full py-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-950/50 transition-all font-mono text-xs font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isOptimizingTarget ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></span>
+                        TARANIYOR VE TEMİZLENİYOR...
+                      </>
+                    ) : (
+                      <>
+                        <Flame className="w-4 h-4 fill-current text-emerald-400" />
+                        HEDEF KODU TEMİZLE
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* Metric Result gauges */}
+              {optResult && (
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg font-mono text-xs space-y-4">
+                  <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider mb-2">
+                    Ekolojik Enerji Analizleri
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-950 border border-slate-800/50 rounded-xl p-3">
+                      <span className="text-[9px] text-slate-500 uppercase block mb-1">Veri Küçülme Oranı</span>
+                      <span className="text-base text-emerald-400 font-bold font-display tracking-tight">
+                        {optResult.efficiencyGainPct}%
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800/50 rounded-xl p-3">
+                      <span className="text-[9px] text-slate-500 uppercase block mb-1">Engellenen Karbon</span>
+                      <span className="text-base text-amber-500 font-bold font-display tracking-tight">
+                        {optResult.co2SavingsGrams.toFixed(4)} g
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between border-b border-slate-800 pb-1.5 text-slate-400">
+                      <span>Orijinal Boyut</span>
+                      <span className="text-white">{(optResult.originalSize / 1024).toFixed(2)} KB</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-800 pb-1.5 text-slate-400">
+                      <span>Optimize Boyut</span>
+                      <span className="text-white">{(optResult.optimizedSize / 1024).toFixed(2)} KB</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-800 pb-1.5 text-slate-400">
+                      <span>Temizlenen Kod</span>
+                      <span className="text-emerald-400 font-semibold">{((optResult.originalSize - optResult.optimizedSize) / 1024).toFixed(2)} KB</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-800 pb-1.5 text-slate-400">
+                      <span>Kanıt Mührü</span>
+                      <span className="text-slate-300 font-semibold text-[10px] break-all max-w-[50%] truncate select-all" title={optResult.proofHash}>
+                        {optResult.proofHash}
+                      </span>
+                    </div>
+                    {optResult.txHash && (
+                      <div className="flex justify-between pb-1 text-slate-400">
+                        <span>L2 Ledger Hash</span>
+                        <span className="text-pink-400 hover:underline cursor-pointer flex items-center gap-1 select-all break-all truncate max-w-[50%]" title={optResult.txHash}>
+                          {optResult.txHash}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Report Column */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4.5 h-4.5 text-amber-400" />
+                      Gemini AI Eko-Dönüşüm Denetimi
+                    </div>
+                    <span className="text-[9px] font-mono tracking-wider bg-amber-950 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded">
+                      Gemini 3.5 Core
+                    </span>
+                  </h3>
+
+                  {optResult && optResult.aiReport ? (
+                    <div className="bg-slate-950 border border-slate-800/50 rounded-2xl p-5 text-sm leading-relaxed text-slate-300 font-sans space-y-4 shadow-inner max-h-[400px] overflow-y-auto">
+                      {/* Formatted Markdown Parser */}
+                      <div className="space-y-4">
+                        {optResult.aiReport.split("\n\n").map((section, idx) => {
+                          if (section.startsWith("###")) {
+                            return (
+                              <h4 key={idx} className="font-display font-bold text-white text-base border-b border-slate-800 pb-2 mt-4">
+                                {section.replace("###", "").trim()}
+                              </h4>
+                            );
+                          } else if (section.startsWith("**")) {
+                            const match = section.match(/^\*\*(.*?)\*\*(.*)/s);
+                            if (match) {
+                              return (
+                                <div key={idx} className="mt-2">
+                                  <span className="font-bold text-emerald-400 block mb-1">
+                                    {match[1]}
+                                  </span>
+                                  <p className="text-slate-400 text-xs pl-2 border-l border-emerald-500/30">
+                                    {match[2].trim()}
+                                  </p>
+                                </div>
+                              );
+                            }
+                          }
+                          
+                          // Parse bullet-pointed advice lists
+                          if (section.includes("1.") || section.includes("-") || section.includes("*")) {
+                            return (
+                              <ul key={idx} className="space-y-3 pl-5 list-decimal text-slate-300 text-xs">
+                                {section.split(/\d+\.\s+|- /g).filter(s => s.trim().length > 0).map((bullet, index) => {
+                                  const [title, ...descParts] = bullet.split(":");
+                                  const desc = descParts.join(":");
+                                  return (
+                                    <li key={index} className="leading-relaxed">
+                                      <strong className="text-white">{title.replace(/\*\*/g, "").trim()}</strong>
+                                      {desc && <span className="text-slate-400 font-mono text-[11px] block mt-1 leading-relaxed">{desc.trim()}</span>}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            );
+                          }
+
+                          return (
+                            <p key={idx} className="text-xs text-slate-400 leading-relaxed font-mono">
+                              {section}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-500 py-24 text-xs font-mono text-center">
+                      <Sparkles className="w-12 h-12 text-slate-800 mb-3 animate-[pulse_3s_infinite]" />
+                      Sol panelden bir hedef URL girip temizlik işlemini başlatın.<br />
+                      Gemini çevre dostu denetim motoru, derin sürdürülebilir mimari önerilerini burada sunacaktır.
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-800/80 mt-6 pt-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
+                  <span>Karbon endeksi sistem parametreleri: 0.0000000112 g/byte</span>
+                  <span>Bağlam derinliği: Canlı token akış analizi</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 2.5: OTONOM PAZARYERİ & GELİR PANELİ */}
+        {activeTab === "marketplace" && (
+          <div className="flex flex-col gap-6">
+            
+            {/* Visual Header / Summary Banner */}
+            <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-cyan-950/40 border border-slate-800/80 rounded-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl"></div>
+              <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl"></div>
+              
+              <div className="space-y-2 text-left z-10">
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full font-bold animate-pulse">
+                    OTONOM DİJİTAL FABRİKA AKTİF
+                  </span>
+                  <span className="text-slate-500 font-mono text-xs">● ZERO-GAS REVENUE MODE</span>
+                </div>
+                <h3 className="font-display font-bold text-lg md:text-xl text-white uppercase tracking-tight">
+                  Eko-Geri Dönüşüm ve Veri Madenciliği Portalı
+                </h3>
+                <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                  İnternetteki ham karbon emisyon oranlarını ve dağınık veri paketlerini otonom tarayarak, temizlenmiş çevre dostu karbon kredisi raporlarına dönüştüren, akıllı kontrat ödemelerini saniyesinde cüzdanınıza yönlendiren tam otonom kazanç matrisi.
+                </p>
+              </div>
+
+              {/* Accumulated Real-Time Revenue Board */}
+              <div className="bg-slate-950/90 border border-emerald-500/30 rounded-2xl p-5 w-full md:w-80 shadow-inner shrink-0 relative overflow-hidden text-right">
+                <div className="absolute top-0 left-0 w-12 h-12 bg-emerald-500/5 rounded-full blur-xl"></div>
+                <div className="flex items-center justify-between border-b border-slate-900 pb-2 mb-2">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">AKÜMÜLE OLAN PROTOKOL GELİRİ</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                    <span className="text-[9px] font-mono text-emerald-400">CANLI RAPOR</span>
+                  </div>
+                </div>
+                <div className="text-3xl md:text-4xl font-display font-medium text-emerald-400 tracking-tight">
+                  ${totalEarnings.toFixed(2)} <span className="text-sm font-mono text-slate-500">USDT</span>
+                </div>
+                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center justify-end gap-1">
+                  <span>Otomatik Dağıtım:</span>
+                  <span className="text-cyan-400 select-all font-semibold truncate max-w-[130px]" title={stats.payoutWalletAddress}>
+                    {stats.payoutWalletAddress ? `${stats.payoutWalletAddress.slice(0, 6)}...${stats.payoutWalletAddress.slice(-4)}` : "Atanmadı"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Process Flow / Interactive Mining Cycle */}
+            <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+              <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider mb-4 text-cyan-400 flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                DİJİTAL FABRİKA PROSES AKIŞ ŞEMASI (OTONOM DÖNGÜ)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+                
+                {/* Step 1: Tarama ve Temizleme */}
+                <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
+                  <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">01</div>
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 px-1.5 bg-cyan-950 text-cyan-400 rounded-lg text-[10px] font-mono border border-cyan-500/20">CRAWLER</div>
+                    <span className="text-xs font-semibold text-white font-mono">1. Tarama ve Temizleme</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    İnternetin "çöp" ham verilerini süzerek gereksiz kod satırlarını ayıklar ve temiz enerji tablosu oluşturur.
+                  </p>
+                  <div className="text-[10px] font-mono text-cyan-400/80 mt-1">
+                    {stats.isCrawling ? "⚡ OKUMA AKTİF..." : "💤 BEKLEMEDE / AKTİF METRİK"}
+                  </div>
+                </div>
+
+                {/* Step 2: Yapay Zeka Süzgeci */}
+                <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
+                  <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">02</div>
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 px-1.5 bg-amber-950 text-amber-400 rounded-lg text-[10px] font-mono border border-amber-500/20">AI CORE</div>
+                    <span className="text-xs font-semibold text-white font-mono">2. Yapay Zeka Süzgeci</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Gemini 3.5 modeli ile rafine edilip mühürlenir, ticari değeri yüksek "Karbon Kredisi Veri Paketi" haline getirilir.
+                  </p>
+                  <div className="text-[10px] font-mono text-amber-400/80 mt-1">
+                    ★ RAPOR ÜRETİMİ ENTEGRE
+                  </div>
+                </div>
+
+                {/* Step 3: Satış Havuzu (SALES_QUEUE) */}
+                <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
+                  <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">03</div>
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 px-1.5 bg-pink-950 text-pink-400 rounded-lg text-[10px] font-mono border border-pink-500/20">SALES_QUEUE</div>
+                    <span className="text-xs font-semibold text-white font-mono">3. Satış Kuyruğu (Contract)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Güvenli satış kapısında alıcılara sunulur. Blockchain üzerinde alıcının ödeme yapması beklenir.
+                  </p>
+                  <div className="text-[10px] font-mono text-pink-400/80 mt-1">
+                    {stats.readyToSell ? stats.readyToSell.filter(x => !x.isSold).length : 0} ADET HAZIR PORTFÖY
+                  </div>
+                </div>
+
+                {/* Step 4: Cüzdan Yönlendirme */}
+                <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
+                  <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">04</div>
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 px-1.5 bg-emerald-950 text-emerald-400 rounded-lg text-[10px] font-mono border border-emerald-500/20">AUTO REVENUES</div>
+                    <span className="text-xs font-semibold text-white font-mono">4. Gelir Dağıtımı (Payout)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Akıllı kontrata gelen her USDT saniyesinde payout cüzdan adresinize gaz ücreti harcatmadan doğrudan yönlendirilir.
+                  </p>
+                  <div className="text-[10px] font-mono text-slate-500 mt-1 select-all hover:text-emerald-400 transition-colors">
+                    {stats.payoutWalletAddress ? `${stats.payoutWalletAddress.slice(0, 8)}...` : "Kurulum Yapılmadı"}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Core Parameters Control & Ready to Sell List grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Directives & Wallet settings (Col-5) */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                
+                {/* 1. Master Satış Botu Protokolü - Directives Panel */}
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl"></div>
+                  <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider mb-2.5 text-amber-400 flex items-center gap-1.5">
+                    <Leaf className="w-4 h-4 text-emerald-400" />
+                    MASTER SATIŞ BOTU PROTOKOLÜ (OTONOM)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mb-3.5 leading-relaxed">
+                    Sisteminizin her saniye kesintisiz çalışması ve hiçbir ağ işlem ücreti (Gas Fee/Private Key) harcamadan tamamen sıfır maliyetle çalışmasını sağlayan resmi yönergeler:
+                  </p>
+                  
+                  <div className="space-y-2.5 text-xs text-slate-300 font-mono">
+                    <div className="bg-slate-950/90 p-3.5 rounded-xl border border-slate-800/40 space-y-2">
+                      <div className="text-[11px] border-b border-slate-900 pb-1.5 text-slate-500 flex items-center justify-between font-bold">
+                        <span>PROTOKOL KURALLARI</span>
+                        <span className="text-amber-500 text-[10px] animate-pulse flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                          INSANSIZ_DONGU
+                        </span>
+                      </div>
+                      <div className="space-y-2 text-[10px] leading-relaxed text-slate-300">
+                        <p><strong className="text-emerald-400">1. Limitleri Kaldır (Sonsuz Tarama):</strong> 100 dosya veya herhangi bir sayısal limit yoktur. Tarama, temizleme ve analiz işlemleri, sistem kapatılmadığı sürece aralıksız (loop) sonsuza kadar devam eder.</p>
+                        <p><strong className="text-emerald-400">2. Sonsuz Madencilik (SALES_QUEUE):</strong> Her tarama döngüsünden sonra elde edilen 'temizlenmiş veri', anlık olarak Satış Havuzuna aktarılır.</p>
+                        <p><strong className="text-emerald-400">3. Enerji Tasarrufu Modu:</strong> Sistem boşta geçen sürelerde kaynak tüketimini minimuma indirmek amacıyla otomatik 'sleep' (uyku) moduna geçer, ancak tarayıcı arka planda aktif kalır.</p>
+                        <p><strong className="text-emerald-400">4. Hata Koruması:</strong> Sistem tararken herhangi bir adreste hata alırsa, o adresi akıllıca atlar ve durmaksızın bir sonraki adrese geçerek otonom döngüyü asla bozmaz.</p>
+                        <p><strong className="text-emerald-400">5. Ücretsiz İşletim (Zero-Gas):</strong> Asla cüzdandan doğrudan işlem ücreti kesilmez. Sadece toplayıcı cüzdanınız üzerinden gelen alıcı ödemeleri kabul edilir.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Cüzdan Yapılandırma ve Zero-Gas Modu Switcher */}
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                  <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider mb-4 text-cyan-400 flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-400" />
+                    GELİR HEDEFİ & KANAL YÖNLENDİRME
+                  </h4>
+                  
+                  {/* Payout address Input Form */}
+                  <form onSubmit={(e) => handleSavePayoutSettings(e)} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-mono text-slate-400 block">
+                        GELİR DAĞITIM WALLET ADRESİNİZ (PUBLIC KEY / ERC20)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={walletInput}
+                          onChange={(e) => setWalletInput(e.target.value)}
+                          placeholder="0x... şeklinde ERC20 / Polygon cüzdanı girin"
+                          className="bg-slate-950 border border-slate-800 text-slate-200 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs outline-none flex-grow font-mono"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isUpdatingWallet}
+                          className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-mono text-xs font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                        >
+                          {isUpdatingWallet ? "..." : "KAYDET"}
+                        </button>
+                      </div>
+                      {walletSaveSuccess && (
+                        <p className="text-[10px] text-emerald-400 font-mono animate-pulse">✓ Cüzdan yönlendirme adresi başarıyla kaydedildi!</p>
+                      )}
+                    </div>
+
+                    {/* Zero Gas Toggle Switch */}
+                    <div className="border-t border-slate-800/50 pt-4 flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          SIFIR-GAS (ZERO-GAS) SATICI MODU
+                          <span className="bg-emerald-950 text-emerald-400 rounded px-1.5 py-0.2 text-[9px] font-mono">NET REVENUE</span>
+                        </span>
+                        <p className="text-[10px] text-slate-500 leading-tight pr-2">
+                          Aktifken, toplanan veriler sunucuya gas ödetmeden doğrudan READY_TO_SELL portfolyosuna kaydedilir. Alıcı satın aldığında blockchain'e işlenir.
+                        </p>
+                      </div>
+                      
+                      {/* Interactive Custom Button Switch */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleZeroGas(!stats.zeroGasModeActive)}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
+                          stats.zeroGasModeActive ? "bg-emerald-500" : "bg-slate-800"
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 bg-white rounded-full transition-transform shadow-md ${
+                            stats.zeroGasModeActive ? "translate-x-6" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Micro parameters */}
+                    <div className="bg-slate-950 border border-slate-800/40 p-3.5 rounded-xl font-mono text-[10px] space-y-1.5 text-slate-400">
+                      <div className="flex justify-between">
+                        <span>Akıllı Kapı Sözleşmesi:</span>
+                        <span className="text-slate-300 font-semibold text-[9px] select-all uppercase">0x71C7656EC7ab88b098defB751B7401B5f6d8976F</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Kanal Yönlendirme Cüzdanı:</span>
+                        <span className="text-emerald-400 font-semibold text-[9px] select-all truncate max-w-[160px]">{stats.payoutWalletAddress || "Atanmadı"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Ortak Dağıtım Havuzu:</span>
+                        <span className="text-cyan-400">ETKİN (Sözleşme Seviyesi)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Hata Koruması:</span>
+                        <span className="text-emerald-400">AKTİF (Atlama Teknolojisi)</span>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              {/* Right Column: Ready to Sell Data List Table (Col-7) */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 shadow-lg relative overflow-hidden flex-grow flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/80">
+                      <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider text-amber-500 flex items-center gap-1.5">
+                        <Database className="w-4.5 h-4.5 text-amber-500" />
+                        SALES_QUEUE / HAZIR ENVANTER VERİTABANI ({stats.readyToSell?.filter(x => !x.isSold).length || 0})
+                      </h4>
+                      <span className="text-[10px] font-mono text-slate-500">MÜHÜRLÜ EKO-VERİDOSYALARI</span>
+                    </div>
+
+                    <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                      Crawler bot tarafından sonsuz döngüde taranıp yapay zeka süzgecinden geçirilen ve alıcılara satılmak üzere envantere eklenen, kriptografik kanıt kilitli veri paketleri. Alıcının akıllı sözleşmeye yaptığı ödemeyi doğrudan tetikleyerek sistemin otomatik satış ve anlık gelir dağıtımını anında gerçekleştirebilirsiniz.
+                    </p>
+
+                    {/* Integrated Autopilot Controller Panel */}
+                    <div className="bg-slate-950/80 border border-slate-800/80 p-3.5 rounded-xl mb-4.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs transition-all">
+                      <div className="flex items-start gap-2.5">
+                        <span className="relative flex h-2 w-2 mt-1">
+                          {autoSalesActive ? (
+                            <>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </>
+                          ) : (
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-600"></span>
+                          )}
+                        </span>
+                        <div>
+                          <span className="text-slate-300 font-mono font-bold tracking-wide uppercase block text-[10px]">
+                            {autoSalesActive ? "OTONOM MÜŞTERİ SATIN ALIM AKIŞI: AKTİF (OTOMATİK ÖDEME)" : "OTONOM MÜŞTERİ SATIN ALIM AKIŞI: PASİF (MANUEL TETİKLEME)"}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono block leading-relaxed max-w-[420px]">
+                            {autoSalesActive ? "Akıllı sistem sıradaki mühürlü paketleri 2 saniyede bir otomatik satın alır, geliri payout adresine sevk eder." : "Paketleri satmak ve geliri çekmek için sağdaki 'AKILLI KONTRAT ÖDEMESİNİ AL' düğmesini el ile tetiklemelisiniz."}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setAutoSalesActive(!autoSalesActive)}
+                        className={`font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all pointer shrink-0 ${
+                          autoSalesActive 
+                            ? "bg-emerald-950/45 hover:bg-emerald-900/60 border-emerald-500/30 text-emerald-400" 
+                            : "bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {autoSalesActive ? "SÜRECİ MANUELE AL" : "TAM OTOMATİĞE AL"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-3.5 max-h-[420px] overflow-y-auto pr-1">
+                      {(!stats.readyToSell || stats.readyToSell.length === 0) ? (
+                        <div className="text-slate-700 italic font-mono text-xs text-center py-12">
+                          Envanter veritabanı boş. Otonom tarama botunu başlatarak sisteme sıfır gas ile veri toplayın.
+                        </div>
+                      ) : (
+                        stats.readyToSell.map((item) => (
+                          <div 
+                            key={item.id} 
+                            className={`border rounded-xl p-4 transition-all ${
+                              item.isSold 
+                                ? "bg-slate-950/40 border-slate-900 opacity-60" 
+                                : "bg-slate-950/80 border-slate-800 hover:border-amber-500/30"
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-mono ${
+                                  item.isSold 
+                                    ? "bg-slate-900 text-slate-600 border border-slate-850"
+                                    : "bg-amber-950 text-amber-400 border border-amber-500/20"
+                                }`}>
+                                  {item.id.toUpperCase()}
+                                </span>
+                                <span className="font-mono text-[10px] text-slate-500 max-w-[150px] sm:max-w-[200px] truncate select-all">{item.url}</span>
+                              </div>
+                              <div className="flex items-center gap-2 font-mono">
+                                <span className="text-xs font-bold text-emerald-400">${item.marketPriceUSD.toFixed(2)} USDT</span>
+                                {item.isSold ? (
+                                  <span className="bg-slate-800 text-slate-400 border border-slate-700 rounded px-2 py-0.5 text-[10px] uppercase">✓ GELİR YÖNLENDİRİLDİ</span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleSimulatePurchase(item.id)}
+                                    disabled={purchaseInProgress !== null}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                                  >
+                                    {purchaseInProgress === item.id ? "ÖDEME GELİYOR..." : "AKILLI KONTRAT ÖDEMESİNİ AL"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-slate-300 leading-relaxed mb-3 font-sans">
+                              {item.reportSummary}
+                            </p>
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] border-t border-slate-900 pt-2.5">
+                              <div className="flex flex-wrap gap-1">
+                                {item.extractedKeywords.map((keyword, keywordIdx) => (
+                                  <span key={`${keyword}-${keywordIdx}`} className="bg-slate-900 px-1.5 py-0.2 rounded text-slate-500 text-[9px]">#{keyword}</span>
+                                ))}
+                              </div>
+                              <span className="text-slate-600 text-[9px]">
+                                CO2 Değeri: <strong className="text-slate-400">{item.co2SavingsGrams.toFixed(3)}g</strong> | Kanıt Hash: <span className="text-slate-500 text-[8px] select-all font-mono">{item.proofHash.substring(0, 16)}...</span>
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 border border-slate-800/50 rounded-xl mt-4 flex items-center gap-3 text-slate-500 font-mono text-[10px] leading-relaxed">
+                    <Info className="w-5 h-5 text-amber-500 shrink-0" />
+                    <div>
+                      <strong className="text-slate-300 block mb-0.5 uppercase">Aktif Transfer Prosedürü:</strong>
+                      <span>"ÖDEMEYİ AL" butonunu tetiklediğinizde, alıcının akıllı kontrata (0x71...) yatırdığı USDT/POL/ETH bedeli anında süzülerek tanımlamış olduğunuz payouts yönlendirme cüzdan adresinize gazsız (Zero-Gas) ve anlık transfer olarak iletilir.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: MICRO-CORE CODE VIEW */}
+        {activeTab === "blueprint" && (
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 shadow-lg leading-relaxed">
+            <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-3 flex items-center gap-2">
+              <Code className="w-4.5 h-4.5 text-pink-400" />
+              İnternet Geri Kazanım Çekirdeği Mimari Şeması
+            </h3>
+            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+              Bu uygulama, sunucu taraflı otonom bot programını arka planda kesintisiz ve canlı olarak yürütür. Ayrıca, bu tam otonom yapay zekalı veri madenciliği sistemini kendi yerel bilgisayarınızda veya sunucunuzda (localhost/vps) 7/24 kesintisiz çalıştırmak üzere tasarlanmış Node.js kaynak kodlarını ve akıllı sözleşmeleri de klasöründe eksiksiz barındırır.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-xs">
+              <div className="bg-slate-950 border border-slate-800/50 p-4 rounded-xl">
+                <span className="text-pink-400 font-medium font-mono uppercase block mb-2 text-[11px]">1. Proje Klasör Yapısı</span>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Sistemi dışarı aktarmak veya yerelde çalıştırmak için projeyi indirdiğinizde aşağıdaki yapı hazır olacaktır:
+                </p>
+                <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/30 mt-3 text-[10px] text-cyan-300">
+                  /internet-reclamation-core<br />
+                  &nbsp;&nbsp;├── .env (Credentials)<br />
+                  &nbsp;&nbsp;├── package.json (Config)<br />
+                  &nbsp;&nbsp;├── bot_main.js (Main Loop)<br />
+                  &nbsp;&nbsp;├── /contracts<br />
+                  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── CarbonHarvester.sol (L2 Smart Contract)<br />
+                  &nbsp;&nbsp;└── /modules<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── crawler.js<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── optimizer.js<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── blockchain.js<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── miner.js (AI Miner Engine)
+                </div>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800/50 p-4 rounded-xl">
+                <span className="text-cyan-400 font-medium font-mono uppercase block mb-2 text-[11px]">2. Çalıştırma Talimatları</span>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  İnsansız bot sistemini kendi terminalinizde çalıştırmak için aşağıdaki adımları sırayla takip etmelisiniz:
+                </p>
+                <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/30 mt-3 text-[10px] text-slate-300 text-left space-y-1">
+                  <div>cd internet-reclamation-core</div>
+                  <div>npm install</div>
+                  <div>node bot_main.js</div>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2">
+                  Not: Gerçek bir akıllı kontrata işlem göndermek için <span className="text-pink-400 select-all">.env</span> dosyasındaki <span className="text-cyan-400 select-all">PRIVATE_KEY</span> değerini ayarlamalısınız.
+                </p>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800/50 p-4 rounded-xl">
+                <span className="text-emerald-400 font-medium font-mono uppercase block mb-2 text-[11px]">3. Karbon Offset Formülü</span>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Matematiksel optimizasyon ve enerji tasarrufu, sunucudan istemciye taşınan byte farkıyla hesaplanır:
+                </p>
+                <div className="bg-slate-900/40 p-3 rounded border border-slate-800/30 mt-3 font-mono text-[9px] text-emerald-300 leading-relaxed text-center">
+                  Gram CO2 = (Orijinal_Byte - Optimize_Byte)<br />
+                  * 0.0000000112<br />
+                  * Yıllık_Trafik (35,000)
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2">
+                  Ekolojik araştırmalara göre, her 1 Byte WAN transferi ortalama 11.2 nano-gram CO₂ üretir.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* REAL-TIME terminal LOGGING PANEL */}
+      <footer className="border border-slate-800 bg-slate-950 rounded-2xl overflow-hidden shadow-2xl shrink-0 font-mono text-xs">
+        {/* Terminal Header */}
+        <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-cyan-400" />
+            <span className="font-semibold text-white tracking-wide">OTONOM KONSOL TELEMETRİ AKIŞI</span>
+            <span className="animate-pulse w-2 h-2 bg-green-500 rounded-full"></span>
+          </div>
+          
+          {/* Terminal Search Filter */}
+          <div className="relative">
+            <input
+              type="text"
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+              placeholder="Filtrele... (örn: error, proof)"
+              className="bg-slate-950 border border-slate-800 text-slate-200 focus:border-cyan-500/50 rounded px-2.5 py-1 text-[11px] placeholder:text-slate-800 outline-none w-48 sm:w-56 font-mono"
+            />
+            <Search className="absolute right-2 top-1.5 w-3.5 h-3.5 text-slate-600" />
+          </div>
+        </div>
+
+        {/* Terminal Scroll Box */}
+        <div className="p-4 bg-slate-950 min-h-[160px] max-h-[220px] overflow-y-auto space-y-1.5 scrollbar-thin select-text">
+          {filteredLogs.length === 0 ? (
+            <div className="text-slate-700 italic text-center py-8">
+              Henüz telemetri günlüğü kaydedilmedi. Canlı konsol çıktısını görmek için otonom tarama botunu başlatın.
+            </div>
+          ) : (
+            filteredLogs.map((log, logIdx) => (
+              <div key={`${log.id}-${logIdx}`} className="text-[11px] leading-relaxed flex items-start gap-1">
+                <span className="text-slate-600 shrink-0 text-[10px]">
+                  [{new Date(log.timestamp).toLocaleTimeString()}]
+                </span>
+                <span className={`font-semibold uppercase text-[10px] shrink-0 border border-current bg-opacity-10 px-1 py-0 px-1 py-0.2 rounded ${getLogStyle(log.module, log.level)}`}>
+                  {log.module}
+                </span>
+                <span className={`break-all ${getLogStyle(log.module, log.level)}`}>
+                  {log.message}
+                </span>
+              </div>
+            ))
+          )}
+          <div ref={terminalEndRef} />
+        </div>
+      </footer>
+
+    </div>
+  );
+}
