@@ -56,7 +56,9 @@ export class BlockchainRouter {
     this.contractAddress = contract;
 
     // ÜRETİM MODU KONTROLÜ: Network mode 'mainnet' ise gerçek işlemleri zorunlu kılar.
-    this.isRealMode = blockchainConfig.networkMode === 'mainnet';
+    // Bu değişken artık doğrudan simülasyonu tetiklemek yerine, kritik uyarılar için kullanılır.
+    // Gerçek işlem denemesi her zaman yapılır, ancak anahtar yoksa hata döner.
+    this.isRealMode = blockchainConfig.networkMode === 'mainnet' && !!this.privateKey && !this.privateKey.includes('YOUR_PRIVATE_KEY');
   }
 
   public registerLogger(cb: typeof this.logCallback) {
@@ -101,13 +103,6 @@ export class BlockchainRouter {
   public async triggerBorsaSwap(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
     this.emitLog('BLOCKCHAIN', 'INFO', `Blokzinciri ağ geçidi hazırlanıyor...`);
 
-    // Cüzdan kontrolü
-    if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      const errMsg = "HATA: Üretim modunda geçerli bir PRIVATE_KEY (Özel Anahtar) gereklidir. İşlem durduruldu.";
-      this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
-      return { success: false, txHash: '', simulated: false, error: errMsg };
-    }
-
     let lastError: any = null;
     for (let i = 0; i < this.rpcEndpoints.length; i++) {
       const currentRpc = this.rpcEndpoints[i];
@@ -121,6 +116,12 @@ export class BlockchainRouter {
         
         // Load and verify security keys
         const wallet = new ethers.Wallet(this.privateKey, provider);
+        if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
+          const errMsg = "HATA: Geçerli bir PRIVATE_KEY (Özel Anahtar) gereklidir. İşlem durduruldu.";
+          this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
+          return { success: false, txHash: '', simulated: false, error: errMsg };
+        }
+
         const balance = await provider.getBalance(wallet.address).catch(() => ethers.BigNumber.from(0));
         
         if (balance.isZero() && this.isRealMode) {
@@ -229,13 +230,6 @@ export class BlockchainRouter {
 
     // Özel anahtarın mevcut ve geçerli olduğunu kontrol et
     const pkey = this.privateKey;
-
-    if (!pkey || pkey.includes('YOUR_PRIVATE_KEY')) {
-      const errMsg = "HATA: Gerçek gelir transferi için geçerli bir PRIVATE_KEY tanımlanmalıdır.";
-      this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
-      return { success: false, txHash: '', simulated: false, error: errMsg };
-    }
-
     const bscRpcEndpoints = ['https://bsc-dataseed.binance.org/', 'https://rpc.ankr.com/bsc', 'https://binance.llamarpc.com'];
     let payoutError: any = null;
 
@@ -245,6 +239,11 @@ export class BlockchainRouter {
 
         const provider = new ethers.providers.JsonRpcProvider({ url: bscRpc, timeout: 10000 });
         const wallet = new ethers.Wallet(pkey, provider);
+        if (!pkey || pkey.includes('YOUR_PRIVATE_KEY')) {
+          const errMsg = "HATA: Gerçek gelir transferi için geçerli bir PRIVATE_KEY tanımlanmalıdır.";
+          this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
+          return { success: false, txHash: '', simulated: false, error: errMsg };
+        }
 
         const balance = await provider.getBalance(wallet.address);
         const amountWei = ethers.utils.parseEther(bnbAmountStr);

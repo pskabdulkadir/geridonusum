@@ -272,13 +272,6 @@ export default function App() {
         body: JSON.stringify({ itemId })
       });
       if (res.ok) {
-        // Update earnings accumulator
-        setTotalEarnings(prev => {
-          const updated = prev + itemPrice;
-          localStorage.setItem("eco_total_earnings", updated.toString());
-          return updated;
-        });
-
         // Trigger quick local stats update
         const statsRes = await fetch("/api/stats");
         if (statsRes.ok) {

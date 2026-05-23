@@ -199,50 +199,45 @@ async function runBotTaskRecursive() {
       const gasPreservationThresholdGrams = 0.05;
       
       if (metric.co2SavingsGrams > gasPreservationThresholdGrams) {
-        if (serverState.zeroGasModeActive) {
-          const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
-          const calculatedPrice = parseFloat((Math.max(5.00, metric.co2SavingsGrams * 2.5) + (Math.random() * 2)).toFixed(2));
-
+        // Always attempt to mint the proof on-chain if conditions are met and private key is available
+        pushLog('BLOCKCHAIN', 'INFO', `Özel Anahtar ile zincir içi doğrudan kayıt yapılıyor (Gas Modu)...`);
+        const blockResult = await mainBlockchain.triggerBorsaSwap(metric.co2SavingsGrams, proofHash);
+        
+        if (blockResult.success) {
           if (mongoose.connection.readyState !== 1) {
-            pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. READY_TO_SELL öğesi kaydedilemedi.');
+            pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İşlem kaydı yapılamadı.');
             return; // Veritabanı bağlantısı yoksa işlemi durdur
           }
-
-          
-          const newItem: ReadyToSellItem = {
-            id: generatedId,
+          await TransactionModel.create({
             url,
             proofHash,
-            co2SavingsGrams: parseFloat(metric.co2SavingsGrams.toFixed(4)),
-            extractedKeywords: ["carbon", "optimized", "green-web", ...url.split("/").filter(x => x.length > 2 && !x.includes(".")).map(x => x.toLowerCase()).slice(0, 3)],
-            reportSummary: `Yapay Zeka Süzgeci Raporu: ${url} kaynağından ${metric.co2SavingsGrams.toFixed(4)} gram CO2 tasarrufu otonom temizlenerek satış listesine eklendi.`,
-            marketPriceUSD: calculatedPrice,
-            isSold: false,
-            timestamp: new Date().toISOString()
-          };
-          
-          // MongoDB'ye Kaydet (Kalıcı Satış Havuzu)
-          await ReadyToSellModel.create(newItem);
-          
-          pushLog('AI', 'SUCCESS', `[READY_TO_SELL] Veri paketi yapay zeka tarafından süzülüp READY_TO_SELL portfolyosuna eklendi! Fiyat: $${calculatedPrice}`);
-          pushLog('BLOCKCHAIN', 'INFO', `Sıfır-Gas Satış Modu Aktif. Cüzdan gas harcaması yapılmadı, alıcının sözleşmeye ödeme yapması bekleniyor.`);
-        } else {
-          // Send manual TX via polygon router (costs gas)
-          pushLog('BLOCKCHAIN', 'INFO', `Özel Anahtar ile zincir içi doğrudan kayıt yapılıyor (Gas Modu)...`);
-          const blockResult = await mainBlockchain.triggerBorsaSwap(metric.co2SavingsGrams, proofHash);
-          
-          if (blockResult.success) {
-            if (mongoose.connection.readyState !== 1) {
-              pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İşlem kaydı yapılamadı.');
-              return; // Veritabanı bağlantısı yoksa işlemi durdur
-            }
-            await TransactionModel.create({
+            savedGrams: metric.co2SavingsGrams,
+            txHash: blockResult.txHash,
+            simulated: blockResult.simulated, // This will now always be false if successful
+          });
+
+          // If zeroGasModeActive, also add to ReadyToSell for potential payout
+          if (serverState.zeroGasModeActive) {
+            const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
+            const calculatedPrice = parseFloat((Math.max(5.00, metric.co2SavingsGrams * 2.5) + (Math.random() * 2)).toFixed(2));
+
+            const newItem: ReadyToSellItem = {
+              id: generatedId,
               url,
               proofHash,
-              savedGrams: metric.co2SavingsGrams,
-              txHash: blockResult.txHash,
-              simulated: blockResult.simulated,
-            });
+              co2SavingsGrams: parseFloat(metric.co2SavingsGrams.toFixed(4)),
+              extractedKeywords: ["carbon", "optimized", "green-web", ...url.split("/").filter(x => x.length > 2 && !x.includes(".")).map(x => x.toLowerCase()).slice(0, 3)],
+              reportSummary: `Yapay Zeka Süzgeci Raporu: ${url} kaynağından ${metric.co2SavingsGrams.toFixed(4)} gram CO2 tasarrufu otonom temizlenerek satış listesine eklendi.`,
+              marketPriceUSD: calculatedPrice,
+              isSold: false,
+              timestamp: new Date().toISOString()
+            };
+            
+            // MongoDB'ye Kaydet (Kalıcı Satış Havuzu)
+            await ReadyToSellModel.create(newItem);
+            
+            pushLog('AI', 'SUCCESS', `[READY_TO_SELL] Veri paketi yapay zeka tarafından süzülüp READY_TO_SELL portfolyosuna eklendi! Fiyat: $${calculatedPrice}`);
+            pushLog('BLOCKCHAIN', 'INFO', `Sıfır-Gas Satış Modu Aktif. Cüzdan gas harcaması yapılmadı, alıcının sözleşmeye ödeme yapması bekleniyor.`);
           }
         }
       } else {
