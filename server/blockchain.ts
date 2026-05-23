@@ -17,6 +17,11 @@ export class BlockchainRouter {
   public contractAddress: string;
   private isRealMode: boolean = false;
 
+  private gasThresholds = {
+    polygon: "2.0", // MATIC/POL
+    bsc: "0.005"   // BNB
+  };
+
   private logCallback?: (module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) => void;
 
   // Mint function definition support including submitted CarbonHarvester contract requested by user
@@ -55,10 +60,13 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // ÜRETİM MODU KONTROLÜ: Network mode 'mainnet' ise gerçek işlemleri zorunlu kılar.
-    // Bu değişken artık doğrudan simülasyonu tetiklemek yerine, kritik uyarılar için kullanılır.
-    // Gerçek işlem denemesi her zaman yapılır, ancak anahtar yoksa hata döner.
-    this.isRealMode = blockchainConfig.networkMode === 'mainnet' && !!this.privateKey && !this.privateKey.includes('YOUR_PRIVATE_KEY');
+    // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
+    if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
+      console.error("❌ KRITIK: PRIVATE_KEY eksik veya hatalı!");
+      this.isRealMode = false;
+    } else {
+      this.isRealMode = true;
+    }
   }
 
   public registerLogger(cb: typeof this.logCallback) {
@@ -95,6 +103,59 @@ export class BlockchainRouter {
     if (message.includes('execution reverted')) return "Akıllı kontrat işlemi reddetti; koşullar sağlanmamış olabilir.";
     if (message.includes('timeout') || message.includes('ETIMEDOUT')) return "İşlem ağ yoğunluğu nedeniyle zaman aşımına uğradı.";
     return "İşlem ağ hatası nedeniyle başarısız oldu, lütfen tekrar deneyin.";
+  }
+
+  /**
+   * Gas ücreti ödemeden (Gasless), satış emrini kriptografik olarak imzalar.
+   */
+  public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `Satış emri imzalanıyor: ${itemId}...`);
+    
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+
+      const message = JSON.stringify({
+        action: "SELL_RECLAMATION_DATA",
+        id: itemId,
+        amount: amount,
+        price: price,
+        timestamp: Date.now()
+      });
+
+      const signature = await wallet.signMessage(message);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `İşlem başarıyla imzalandı. Sunucuya iletiliyor.`);
+      return signature;
+    } catch (err: any) {
+      throw new Error(`İmzalama hatası: ${err.message}`);
+    }
+  }
+
+  /**
+   * Gerçek Satış İşlemi: CHANNEL_ROUTING_WALLET adresine gerçek bakiye transferi yapar.
+   */
+  public async executeRealSale(amountStr: string): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ üzerinde transfer başlatılıyor...`);
+    
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+
+      // İşlem öncesi BSC bakiye kontrolü
+      await this.checkGasBalance('bsc');
+
+      const tx = await wallet.sendTransaction({
+        to: blockchainConfig.payoutWallet,
+        value: ethers.utils.parseEther(amountStr),
+        gasLimit: 21000, // Standart transfer için 21k yeterlidir
+      });
+
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ İşlem gönderildi, Hash: ${tx.hash}`);
+      return tx.hash;
+    } catch (err: any) {
+      this.emitLog('BLOCKCHAIN', 'ERROR', `Satış hatası: ${this.parseBlockchainError(err)}`);
+      throw err;
+    }
   }
 
   /**

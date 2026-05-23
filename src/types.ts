@@ -36,12 +36,13 @@ export interface CoreStats {
   totalCo2SavedGrams: number;
   blockchainProofsMinted: number;
   visitedUrls: string[];
+  totalEarnings: number;
   transactions: TransactionRecord[];
   isCrawling: boolean;
   currentCrawlingUrl: string;
   readyToSell: ReadyToSellItem[];
   payoutWalletAddress: string;
-  zeroGasModeActive: boolean;
+  // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
 
 export interface OptimizationResult {
@@ -62,7 +63,7 @@ export interface OptimizationResult {
 export interface LogEntry {
   id: string;
   timestamp: string;
-  module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI';
+  module: 'SYSTEM' | 'MARKET' | 'EXECUTOR' | 'BLOCKCHAIN' | 'AI';
   level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE';
   message: string;
 }

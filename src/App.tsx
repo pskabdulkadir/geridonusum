@@ -33,12 +33,6 @@ import {
 
 import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
 
-const crawlerSeeds = [
-  "https://wikipedia.org",
-  "https://html.spec.whatwg.org",
-  "https://www.w3.org"
-];
-
 export default function App() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"bot" | "manual" | "marketplace" | "blueprint">("bot");
@@ -57,7 +51,6 @@ export default function App() {
     currentCrawlingUrl: "",
     readyToSell: [],
     payoutWalletAddress: "", // Will be fetched from /api/stats
-    zeroGasModeActive: false, // Will be fetched from /api/stats
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -73,10 +66,8 @@ export default function App() {
   const [walletSaveSuccess, setWalletSaveSuccess] = useState<boolean>(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null);
   const [autoSalesActive, setAutoSalesActive] = useState<boolean>(true);
-  
-  // Gerçek kazanç verisi artık doğrudan sunucu istatistiklerinden (stats.totalEarnings) gelmeli
-  // stats state'i içine totalEarnings eklenmelidir.
-  const totalEarnings = stats.readyToSell?.filter(item => item.isSold).reduce((sum, item) => sum + item.marketPriceUSD, 0) || 0;
+
+  const totalEarnings = stats.totalEarnings || 0;
 
   // Automatically process unsold inventory items when Auto-sales mode is enabled
   useEffect(() => {
@@ -237,36 +228,11 @@ export default function App() {
     }
   };
 
-  // Toggle zero gas active directly
-  const handleToggleZeroGas = async (val: boolean) => {
-    setStats(prev => ({ ...prev, zeroGasModeActive: val }));
-    // Immediately save backend config
-    setIsUpdatingWallet(true);
-    try {
-      await fetch("/api/payout-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payoutWalletAddress: walletInput,
-          zeroGasModeActive: val
-        })
-      });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdatingWallet(false);
-    }
-  };
-
   // Simulate a buyer purchasing a clean carbon data package
   const handleSimulatePurchase = async (itemId: string) => {
     setPurchaseInProgress(itemId);
     try {
-      // Find the price before we mark it as sold
-      const matchedItem = stats.readyToSell.find(i => i.id === itemId);
-      const itemPrice = matchedItem ? matchedItem.marketPriceUSD : 10.00;
-
-      const res = await fetch("/api/simulate-purchase", {
+      const res = await fetch("/api/execute-payout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId })
@@ -490,7 +456,7 @@ export default function App() {
                 </h3>
 
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-                  Yinelemeli giriş (seed) düğümlerini ayrıştıran arka plan tarayıcılarını tetikler. Belirli karbon tasarruf eşiğine ulaşıldığında temizlik kayıtları anında blok zincirine işlenir.
+                  Blockchain Executor Modu: Sistem artık sanal tarama yapmaz. Doğrudan akıllı kontrat emirlerini ve imzalı satış işlemlerini yönetir.
                 </p>
 
                 {/* State Meter */}
@@ -545,24 +511,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Seed Node Directory */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
-                <h3 className="font-display font-semibold text-white uppercase text-sm tracking-wide mb-3 flex items-center gap-2">
-                  <Layers className="w-4.5 h-4.5 text-cyan-400" />
-                  Birincil Sektör Girişleri (Seeds)
-                </h3>
-                <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-                  Mevcut şebeke kazanımı segmentinin başlangıç düğümleri:
-                </p>
-                <div className="space-y-2 font-mono text-xs">
-                  {crawlerSeeds.map((seed, id) => (
-                    <div key={id} className="flex items-center justify-between border border-slate-800/60 bg-slate-950/40 p-2.5 rounded-xl">
-                      <span className="text-slate-300 break-all">{seed}</span>
-                      <span className="text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">SECTOR_{id}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Blockchain transactions */}
@@ -868,7 +816,7 @@ export default function App() {
                   <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full font-bold animate-pulse">
                     OTONOM DİJİTAL FABRİKA AKTİF
                   </span>
-                  <span className="text-slate-500 font-mono text-xs">● ZERO-GAS REVENUE MODE</span>
+                  <span className="text-slate-500 font-mono text-xs">● REAL-TIME ON-CHAIN REVENUE</span>
                 </div>
                 <h3 className="font-display font-bold text-lg md:text-xl text-white uppercase tracking-tight">
                   Eko-Geri Dönüşüm ve Veri Madenciliği Portalı
@@ -1002,7 +950,7 @@ export default function App() {
                         <p><strong className="text-emerald-400">2. Sonsuz Madencilik (SALES_QUEUE):</strong> Her tarama döngüsünden sonra elde edilen 'temizlenmiş veri', anlık olarak Satış Havuzuna aktarılır.</p>
                         <p><strong className="text-emerald-400">3. Enerji Tasarrufu Modu:</strong> Sistem boşta geçen sürelerde kaynak tüketimini minimuma indirmek amacıyla otomatik 'sleep' (uyku) moduna geçer, ancak tarayıcı arka planda aktif kalır.</p>
                         <p><strong className="text-emerald-400">4. Hata Koruması:</strong> Sistem tararken herhangi bir adreste hata alırsa, o adresi akıllıca atlar ve durmaksızın bir sonraki adrese geçerek otonom döngüyü asla bozmaz.</p>
-                        <p><strong className="text-emerald-400">5. Ücretsiz İşletim (Zero-Gas):</strong> Asla cüzdandan doğrudan işlem ücreti kesilmez. Sadece toplayıcı cüzdanınız üzerinden gelen alıcı ödemeleri kabul edilir.</p>
+                        <p><strong className="text-emerald-400">5. Gerçek Zamanlı Doğrulama:</strong> Tüm işlemler ağ üzerindeki madenciler tarafından onaylanır. Cüzdanınızda gas ücreti için bakiye bulunduğundan emin olun.</p>
                       </div>
                     </div>
                   </div>
@@ -1040,34 +988,6 @@ export default function App() {
                       {walletSaveSuccess && (
                         <p className="text-[10px] text-emerald-400 font-mono animate-pulse">✓ Cüzdan yönlendirme adresi başarıyla kaydedildi!</p>
                       )}
-                    </div>
-
-                    {/* Zero Gas Toggle Switch */}
-                    <div className="border-t border-slate-800/50 pt-4 flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                          SIFIR-GAS (ZERO-GAS) SATICI MODU
-                          <span className="bg-emerald-950 text-emerald-400 rounded px-1.5 py-0.2 text-[9px] font-mono">NET REVENUE</span>
-                        </span>
-                        <p className="text-[10px] text-slate-500 leading-tight pr-2">
-                          Aktifken, toplanan veriler sunucuya gas ödetmeden doğrudan READY_TO_SELL portfolyosuna kaydedilir. Alıcı satın aldığında blockchain'e işlenir.
-                        </p>
-                      </div>
-                      
-                      {/* Interactive Custom Button Switch */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleZeroGas(!stats.zeroGasModeActive)}
-                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
-                          stats.zeroGasModeActive ? "bg-emerald-500" : "bg-slate-800"
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 bg-white rounded-full transition-transform shadow-md ${
-                            stats.zeroGasModeActive ? "translate-x-6" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
                     </div>
 
                     {/* Micro parameters */}
@@ -1124,10 +1044,10 @@ export default function App() {
                         </span>
                         <div>
                           <span className="text-slate-300 font-mono font-bold tracking-wide uppercase block text-[10px]">
-                            {autoSalesActive ? "OTONOM MÜŞTERİ SATIN ALIM AKIŞI: AKTİF (OTOMATİK ÖDEME)" : "OTONOM MÜŞTERİ SATIN ALIM AKIŞI: PASİF (MANUEL TETİKLEME)"}
+                            {autoSalesActive ? "OTONOM GELİR TOPLAMA SİSTEMİ: AKTİF (OTOMATİK)" : "OTONOM GELİR TOPLAMA SİSTEMİ: PASİF (MANUEL)"}
                           </span>
                           <span className="text-[9px] text-slate-500 font-mono block leading-relaxed max-w-[420px]">
-                            {autoSalesActive ? "Akıllı sistem sıradaki mühürlü paketleri 2 saniyede bir otomatik satın alır, geliri payout adresine sevk eder." : "Paketleri satmak ve geliri çekmek için sağdaki 'AKILLI KONTRAT ÖDEMESİNİ AL' düğmesini el ile tetiklemelisiniz."}
+                            {autoSalesActive ? "Sistem her yeni veride otomatik ödeme emri oluşturur ve geliri cüzdanınıza sevk eder." : "Geliri çekmek için sağdaki 'AKILLI KONTRAT ÖDEMESİNİ AL' düğmesini kullanmalısınız."}
                           </span>
                         </div>
                       </div>
@@ -1179,7 +1099,7 @@ export default function App() {
                                     disabled={purchaseInProgress !== null}
                                     className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition-all cursor-pointer disabled:opacity-50"
                                   >
-                                    {purchaseInProgress === item.id ? "ÖDEME GELİYOR..." : "AKILLI KONTRAT ÖDEMESİNİ AL"}
+                                    {purchaseInProgress === item.id ? "İŞLENİYOR..." : "ÖDEMEYİ TAHSİL ET"}
                                   </button>
                                 )}
                               </div>
