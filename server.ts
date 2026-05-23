@@ -21,7 +21,7 @@ import { WebCrawler } from "./server/crawler.ts";
 import { DataOptimizer } from "./server/optimizer.ts";
 import { BlockchainRouter } from "./server/blockchain.ts";
 import { generateEcoReport } from "./server/gemini.ts";
-import { blockchainConfig } from "./server/config.ts";
+import { blockchainConfig, dbConfig } from "./server/config.ts";
 
 // UNHANDLED ERROR CATCHER - Prevent 502 by keeping process alive
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
@@ -42,6 +42,9 @@ if (!blockchainConfig.contractAddress || blockchainConfig.contractAddress.includ
 }
 if (!blockchainConfig.privateKey) {
   console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Autonomous Simulation Mode.");
+}
+if (!dbConfig.uri) {
+  console.warn("⚠️  WARNING: MONGO_URI is not configured. Database persistence may be disabled.");
 }
 
 const PORT = process.env.PORT || 3000;
@@ -64,7 +67,7 @@ const serverState = {
   currentCrawlingUrl: "",
   readyToSell: [] as ReadyToSellItem[],
   payoutWalletAddress: "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4", // Default configurable user wallet address
-  zeroGasModeActive: true, // Defaulting to zero-gas autonomous sales protocol
+  zeroGasModeActive: blockchainConfig.zeroGasActive, // Initialize from config for zero-gas autonomous sales protocol
 };
 
 // SSE Active Connections List

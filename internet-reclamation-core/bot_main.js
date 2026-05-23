@@ -79,9 +79,9 @@ class InternetReclamationBot {
         });
 
         this.blockchain = new BlockchainRouter({
-            rpcUrl: process.env.RPC_URL,
-            privateKey: process.env.PRIVATE_KEY,
-            contractAddress: process.env.CARBON_REGISTRY_CONTRACT
+            rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL,
+            privateKey: process.env.PRIVATE_KEY || process.env.INCOME_DISTRIBUTION_WALLET,
+            contractAddress: process.env.CONTRACT_ADDRESS || process.env.CARBON_REGISTRY_CONTRACT || process.env.SMART_GATE_CONTRACT_ADDRESS
         });
 
         // Track Cumulative Aggregated Statistics

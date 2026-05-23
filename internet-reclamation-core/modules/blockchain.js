@@ -19,9 +19,9 @@ class BlockchainRouter {
      * @param {string} options.contractAddress On-chain Carbon Registry smart contract.
      */
     constructor(options = {}) {
-        let rpc = options.rpcUrl || process.env.RPC_URL;
-        let pkey = options.privateKey || process.env.PRIVATE_KEY;
-        let contract = options.contractAddress || process.env.CARBON_REGISTRY_CONTRACT;
+        let rpc = options.rpcUrl || process.env.POLYGON_RPC_URL || process.env.RPC_URL;
+        let pkey = options.privateKey || process.env.PRIVATE_KEY || process.env.INCOME_DISTRIBUTION_WALLET;
+        let contract = options.contractAddress || process.env.CONTRACT_ADDRESS || process.env.CARBON_REGISTRY_CONTRACT || process.env.SMART_GATE_CONTRACT_ADDRESS;
 
         // Security Fix: Removed hardcoded 'Ghost' private key. System will default to simulation if no key provided.
         if (!pkey || pkey.includes('0x00000000') || pkey === 'YOUR_PRIVATE_KEY') {
