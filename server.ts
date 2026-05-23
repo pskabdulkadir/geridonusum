@@ -23,6 +23,11 @@ import { BlockchainRouter } from "./server/blockchain.ts";
 import { generateEcoReport } from "./server/gemini.ts";
 import { blockchainConfig } from "./server/config.ts";
 
+// UNHANDLED ERROR CATCHER - Prevent 502 by keeping process alive
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 
 const app = express();
@@ -485,27 +490,33 @@ app.post("/api/optimize-url", async (req, res) => {
    ========================================== */
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-    console.log("[SERVER] Vite middleware initialized in Development mode.");
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-    console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
-  }
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("[SERVER] Vite middleware initialized in Development mode.");
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      // Check if dist exists to avoid silent 502s
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+      console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
+    }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`=========================================`);
-    console.log(`[CORE] SYSTEM RUNNING ON HOST 0.0.0.0:${PORT}`);
-    console.log(`=========================================`);
-  });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`=========================================`);
+      console.log(`[CORE] SYSTEM RUNNING ON HOST 0.0.0.0:${PORT}`);
+      console.log(`=========================================`);
+    });
+  } catch (err: any) {
+    console.error("[CRITICAL] Server failed to start:", err.message);
+    process.exit(1);
+  }
 
   // 5-minute autonomous Keep-alive Heartbeat loop
   setInterval(() => {
