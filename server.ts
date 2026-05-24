@@ -11,6 +11,7 @@ import mongoose from "mongoose";
 import express from "express";
 import path from "path";
 import axios from "axios";
+import { ethers } from "ethers";
 import { createServer as createViteServer } from "vite";
 import * as dotenv from "dotenv";
 
@@ -224,7 +225,6 @@ async function exportToMarketplace(item: any) {
     } catch (err: any) {
         pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] Borsa bağlantısı sağlanamadı veya API hatası: ${err.message}`);
     }
-  }
 }
 
 /**
