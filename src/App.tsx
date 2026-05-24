@@ -67,6 +67,17 @@ export default function App() {
   const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null);
   const [autoSalesActive, setAutoSalesActive] = useState<boolean>(true);
 
+  // Wallet Balance State
+  const [walletBalance, setWalletBalance] = useState<{
+    address: string;
+    balanceMATIC: string;
+    balanceUSD: string;
+    isLow: boolean;
+    error?: string;
+    timestamp: string;
+  } | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
+
   const totalEarnings = stats.totalEarnings || 0;
 
   // Automatically process unsold inventory items when Auto-sales mode is enabled
@@ -121,6 +132,29 @@ export default function App() {
 
     fetchStats();
     const interval = setInterval(fetchStats, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Wallet Balance Refresh (30 saniye aralıkla)
+  const fetchWalletBalance = async () => {
+    setIsLoadingBalance(true);
+    try {
+      const response = await fetch("/api/wallet-balance");
+      if (response.ok) {
+        const data = await response.json();
+        setWalletBalance(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch wallet balance:", err);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  // Wallet balance otomatik yenileme (30 saniye)
+  useEffect(() => {
+    fetchWalletBalance();
+    const interval = setInterval(fetchWalletBalance, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1010,6 +1044,79 @@ export default function App() {
                       </div>
                     </div>
                   </form>
+
+                  {/* Wallet Balance Card */}
+                  <div className="mt-6 pt-6 border-t border-slate-800/80">
+                    <div className="bg-gradient-to-br from-pink-950/40 to-rose-950/20 border-2 border-pink-500/40 rounded-2xl p-5 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/5 rounded-full blur-2xl"></div>
+
+                      <div className="flex items-center justify-between mb-4">
+                        <h5 className="text-xs font-bold uppercase text-pink-400 flex items-center gap-1.5 font-mono">
+                          <Coins className="w-3.5 h-3.5" />
+                          CANLI POLYGON MAINNET BAKIYE
+                        </h5>
+                        <button
+                          onClick={fetchWalletBalance}
+                          disabled={isLoadingBalance}
+                          className="text-[9px] font-mono px-2.5 py-1 bg-pink-950/40 hover:bg-pink-950/60 border border-pink-500/30 text-pink-400 rounded transition-all disabled:opacity-50"
+                        >
+                          {isLoadingBalance ? "GÜNCELLENIYOR..." : "YENİLE"}
+                        </button>
+                      </div>
+
+                      {walletBalance && !walletBalance.error ? (
+                        <div className="space-y-4">
+                          {/* Balance Display */}
+                          <div className="bg-slate-950/60 rounded-xl p-4 border border-pink-500/20">
+                            <div className="text-right">
+                              <div className="text-2xl md:text-3xl font-bold text-pink-400 font-mono tracking-tight">
+                                {walletBalance.balanceMATIC}
+                              </div>
+                              <div className="text-xs text-slate-400 font-mono mt-1">
+                                MATIC • ≈ ${walletBalance.balanceUSD} USD
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-mono">DURUM:</span>
+                            <span className={`px-2.5 py-1 rounded-lg font-mono font-bold uppercase text-[9px] ${
+                              walletBalance.isLow
+                                ? "bg-orange-950/40 border border-orange-500/30 text-orange-400"
+                                : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-400"
+                            }`}>
+                              {walletBalance.isLow ? "⚠️ BAKİYE DÜŞÜK" : "✓ GAS YETERLİ"}
+                            </span>
+                          </div>
+
+                          {/* Wallet Address */}
+                          <div className="text-[9px] font-mono">
+                            <span className="text-slate-400">Cüzdan:</span>
+                            <span className="text-pink-400 ml-2 select-all">
+                              {walletBalance.address ? `${walletBalance.address.slice(0, 8)}...${walletBalance.address.slice(-6)}` : "Belirtilmedi"}
+                            </span>
+                          </div>
+
+                          {/* Last Update */}
+                          <div className="text-[8px] text-slate-500 font-mono text-right border-t border-slate-800/50 pt-2">
+                            Son güncelleme: {new Date(walletBalance.timestamp).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <div className="text-xs text-slate-400 font-mono mb-2">
+                            {walletBalance?.error === "PRIVATE_KEY not configured"
+                              ? "PRIVATE_KEY yapılandırılmadı"
+                              : "Bakiye sorgulanamadı"}
+                          </div>
+                          <p className="text-[9px] text-slate-500 leading-relaxed">
+                            Polygon ağında cüzdan bakiyesini görmek için .env dosyasında <span className="font-mono text-pink-400">PRIVATE_KEY</span> ayarlanmalıdır.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 

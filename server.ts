@@ -309,9 +309,58 @@ app.get("/api/stats", async (req, res) => {
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);
-    res.status(500).json({ 
-      error: "Internal server error reading telemetry stats value", 
+    res.status(500).json({
+      error: "Internal server error reading telemetry stats value",
       message: err.message
+    });
+  }
+});
+
+/**
+ * Wallet Balance Checker - Canlı Polygon Mainnet Bakiye Sorgusu
+ */
+app.get("/api/wallet-balance", async (req, res) => {
+  try {
+    if (!blockchainConfig.privateKey) {
+      return res.json({
+        address: "",
+        balanceMATIC: "0",
+        balanceUSD: "0",
+        error: "PRIVATE_KEY not configured",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Wallet address türet (privateKey'den)
+    const walletAddress = mainBlockchain.getWalletAddress?.() || "";
+
+    // Polygon RPC'den bakiye al
+    const response = await axios.post(blockchainConfig.rpcUrl, {
+      jsonrpc: "2.0",
+      method: "eth_getBalance",
+      params: [walletAddress, "latest"],
+      id: 1
+    });
+
+    const balanceHex = response.data.result || "0x0";
+    const balanceWei = BigInt(balanceHex);
+    const balanceMATIC = (Number(balanceWei) / 1e18).toFixed(6);
+    const maticPrice = 0.38; // Yaklaşık MATIC/USD fiyatı
+    const balanceUSD = (parseFloat(balanceMATIC) * maticPrice).toFixed(2);
+
+    res.json({
+      address: walletAddress,
+      balanceMATIC: balanceMATIC,
+      balanceUSD: balanceUSD,
+      isLow: parseFloat(balanceMATIC) < 0.01,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error("[API_ERROR] /api/wallet-balance failed:", err);
+    res.status(500).json({
+      error: "Wallet balance query failed",
+      message: err.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
