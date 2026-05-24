@@ -60,9 +60,9 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // ÜRETİM MODU KONTROLÜ
+    // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      console.error("❌ CRITICAL: Üretim modunda geçerli bir PRIVATE_KEY tanımlanmalıdır!");
+      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -71,6 +71,21 @@ export class BlockchainRouter {
 
   public registerLogger(cb: typeof this.logCallback) {
     this.logCallback = cb;
+  }
+
+  /**
+   * Cüzdan adresini döndür (PRIVATE_KEY'den türetilmiş)
+   */
+  public getWalletAddress(): string {
+    if (!this.privateKey || this.privateKey.includes('0xtest')) {
+      return "";
+    }
+    try {
+      const wallet = new ethers.Wallet(this.privateKey);
+      return wallet.address;
+    } catch {
+      return "";
+    }
   }
 
   private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {
@@ -106,77 +121,16 @@ export class BlockchainRouter {
   }
 
   /**
-   * PROTOKOL_REAL: EIP-712 Standartlarında yapılandırılmış satış emri imzalar.
-   * Bu imza, alıcı tarafından 'buyAsset' fonksiyonunda kullanılır.
-   */
-  public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Satış emri mühürleniyor: ${itemId}...`);
-    
-    try {
-      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-      const wallet = new ethers.Wallet(this.privateKey, provider);
-
-      const network = await provider.getNetwork();
-      // Domain Separator (Kontrat ile eşleşmeli)
-      const domain = {
-        name: "InternetReclamationMarket",
-        version: "1",
-        chainId: network.chainId, // Dinamik Zincir Kimliği
-        verifyingContract: this.contractAddress
-      };
-
-      // Veri Yapısı (Types)
-      const types = {
-        AssetSale: [
-          { name: "id", type: "string" },
-          { name: "price", type: "uint256" },
-          { name: "seller", type: "address" }
-        ]
-      };
-
-      // Veri (Value)
-      const value = {
-        id: itemId,
-        price: ethers.utils.parseUnits(price.toFixed(18), 18),
-        seller: wallet.address
-      };
-
-      const signature = await wallet._signTypedData(domain, types, value);
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Dijital mühür başarıyla oluşturuldu.`);
-      return signature;
-    } catch (err: any) {
-      throw new Error(`İmzalama hatası: ${err.message}`);
-    }
-  }
-
-  /**
-   * PRIVATE_KEY üzerinden cüzdan adresini hesaplar ve döndürür.
-   */
-  public getWalletAddress(): string | null {
-    try {
-      if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) return null;
-      const wallet = new ethers.Wallet(this.privateKey);
-      return wallet.address;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /**
    * Cüzdan bakiyesini kontrol eder ve üretim modu için kritik eşik uyarısı verir.
+   * Bu fonksiyon, ödeme emri öncesinde sistemin gas ücretini karşılayıp karşılayamayacağını denetler.
    */
   public async checkGasBalance(network: 'polygon' | 'bsc' = 'bsc'): Promise<{ balance: string, isLow: boolean }> {
     try {
-      // Ağ tipine göre uygun RPC terminalini seç
-      const rpc = network === 'bsc' 
-        ? 'https://bsc-dataseed.binance.org/' 
-        : (this.rpcUrl || 'https://polygon-rpc.com');
-        
-      const provider = new ethers.providers.JsonRpcProvider({
-        url: rpc,
-        timeout: 5000 // RPC yanıt vermediğinde sunucuyu kilitlememesi için
-      });
+      // Ağ tipine göre uygun RPC terminalini seç (BSC veya Polygon)
+      const rpc = network === 'bsc' ? 'https://bsc-dataseed.binance.org/' : (this.rpcUrl || 'https://polygon-rpc.com');
+      const provider = new ethers.providers.JsonRpcProvider(rpc);
       const wallet = new ethers.Wallet(this.privateKey, provider);
+      
       const balance = await provider.getBalance(wallet.address);
       const balanceInEther = ethers.utils.formatEther(balance);
       
@@ -184,69 +138,64 @@ export class BlockchainRouter {
       const isLow = parseFloat(balanceInEther) < parseFloat(threshold);
 
       if (isLow) {
-        // Sık log üretimini engellemek için sadece konsola yaz
-        console.warn(`[WALLET] Low balance detected: ${balanceInEther} ${network === 'bsc' ? 'BNB' : 'POL'}`);
+        this.emitLog('BLOCKCHAIN', 'WARNING', `DİKKAT: Üretim bakiyesi düşük (${balanceInEther} ${network === 'bsc' ? 'BNB' : 'POL'}). İşlem sürekliliği için bakiye ekleyin.`);
       }
       return { balance: balanceInEther, isLow };
     } catch (err) {
-      return { balance: "0", isLow: true };
+      throw new Error("BLOCKCHAIN_CONNECTIVITY_LOST: On-chain bakiye sorgulanamadı.");
     }
   }
 
   /**
-   * PROTOKOL_4: Aracı Komisyon Cüzdanı Mimarisi (Split Payout) - REAL MODE
-   * Bu fonksiyon simülasyondan çıkarıldı. Artık gerçek transferleri yönetir.
+   * Gas ücreti ödemeden (Gasless), satış emrini kriptografik olarak imzalar.
    */
-  public async executeRealSale(amountStr: string): Promise<{ success: boolean; txHash?: string; error?: string; status?: 'PENDING' | 'REJECTED' }> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `[PROTOKOL_ON_CHAIN] Gerçek Mainnet transferi imzalanıyor...`);
+  public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `Satış emri imzalanıyor: ${itemId}...`);
     
     try {
-      if (!this.isRealMode) throw new Error("Üretim modu aktif değil. PRIVATE_KEY eksik.");
-
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-      const feeData = await provider.getFeeData();
       const wallet = new ethers.Wallet(this.privateKey, provider);
-      
-      const masterWallet = ethers.utils.getAddress(blockchainConfig.payoutWallet);
-      const commissionWallet = ethers.utils.getAddress(blockchainConfig.commissionWallet);
 
-      const totalWei = ethers.utils.parseEther(amountStr);
-      const commissionWei = totalWei.mul(Math.floor(blockchainConfig.commissionRate * 100)).div(100);
-      const netWei = totalWei.sub(commissionWei);
-
-      // Bakiye Kontrolü (Gas + Tutar)
-      const balance = await provider.getBalance(wallet.address);
-      const gasLimit = 45000;
-      const totalCost = totalWei.add(feeData.gasPrice?.mul(gasLimit) || 0);
-
-      if (balance.lt(totalCost)) {
-        return { success: false, status: 'PENDING', error: `Yetersiz bakiye. Gerekli: ${ethers.utils.formatEther(totalCost)} BNB` };
-      }
-
-      // Gerçek Transfer: Komisyon
-      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 1/2: Komisyon transferi gönderiliyor...`);
-      const txComm = await wallet.sendTransaction({
-        to: commissionWallet,
-        value: commissionWei,
-        gasLimit
+      const message = JSON.stringify({
+        action: "SELL_RECLAMATION_DATA",
+        id: itemId,
+        amount: amount,
+        price: price,
+        timestamp: Date.now()
       });
-      await txComm.wait();
 
-      // Gerçek Transfer: Net Gelir
-      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 2/2: Net gelir master cüzdana sevk ediliyor...`);
-      const txNet = await wallet.sendTransaction({
-        to: masterWallet,
-        value: netWei,
-        gasLimit
-      });
-      
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ [TX_SUCCESS] İşlem onaylandı: ${txNet.hash}`);
-      return { success: true, txHash: txNet.hash };
-
+      const signature = await wallet.signMessage(message);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `İşlem başarıyla imzalandı. Sunucuya iletiliyor.`);
+      return signature;
     } catch (err: any) {
-      const parsedMsg = this.parseBlockchainError(err);
-      this.emitLog('BLOCKCHAIN', 'ERROR', `[ROLLBACK] İşlem başarısız: ${parsedMsg}`);
-      return { success: false, status: 'REJECTED', error: parsedMsg };
+      throw new Error(`İmzalama hatası: ${err.message}`);
+    }
+  }
+
+  /**
+   * Gerçek Satış İşlemi: CHANNEL_ROUTING_WALLET adresine gerçek bakiye transferi yapar.
+   */
+  public async executeRealSale(amountStr: string): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ geçidi tetiklendi: Gerçek transfer emri hazırlanıyor...`);
+    
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+
+      // İşlem öncesi BSC bakiye kontrolü
+      await this.checkGasBalance('bsc');
+
+      const tx = await wallet.sendTransaction({
+        to: blockchainConfig.payoutWallet,
+        value: ethers.utils.parseEther(amountStr),
+        gasLimit: 35000, // Güvenli üretim limiti
+      });
+
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ İşlem gönderildi, Hash: ${tx.hash}`);
+      return tx.hash;
+    } catch (err: any) {
+      this.emitLog('BLOCKCHAIN', 'ERROR', `Satış hatası: ${this.parseBlockchainError(err)}`);
+      throw err;
     }
   }
 

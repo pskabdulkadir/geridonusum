@@ -31,34 +31,6 @@ function getAiClient(): GoogleGenAI | null {
   return aiInstance;
 }
 
-function getBeautifulFallbackReport(
-  url: string,
-  originalBytes: number,
-  optimizedBytes: number,
-  co2SavedGrams: number,
-  savingPct: string,
-  modeName: string
-): string {
-  const bytesSavedKb = ((originalBytes - optimizedBytes) / 1024).toFixed(2);
-  const origKb = (originalBytes / 1024).toFixed(2);
-  const optKb = (optimizedBytes / 1024).toFixed(2);
-
-  return `### 🍃 Yeşil Kod Sürdürülebilirlik Denetimi (${modeName})
-
-**${url}** adresi için veri optimizasyonu başarıyla tamamlanmıştır.
-
-1. **Karanlık Veri Teşhisi**
-Web sayfasındaki ham kaynak kodunun siber-ekolojik analizi, tekrarlayan veri bloklarının, işlevsiz CSS sınıflarının ve derlenmemiş şablon parçalarının tarayıcı ile sunucu arasında gereksiz gidiş-dönüş (RTT) gecikmeleri oluşturduğunu ortaya koymuştur. Orijinal boyutu **${origKb} KB** olan bu kaynak dosyası, otonom temizlik motorumuz tarafından arındırılarak **${optKb} KB** seviyesine düşürülmüştür. Yapılan bu yapısal budama çalışması sunucu tarafındaki CPU yükünü hafifletirken, gereksiz veri trafiği sızıntısını engellemektedir.
-
-2. **Enerji Refaktör Önerileri**
-*   **Agresif Sıkıştırma ve Protokol Geliştirme**: Ağ katmanında sıkıştırma verimliliğini artırmak için sunucu yapılandırmasında Brotli mimarisini etkinleştirin. Bu, veri transfer paket boyutlarını %20 daha azaltacaktır.
-*   **Gereksiz Script ve CSS Süzgeci**: Sayfanın yüklenme anında kullanılmayan stil dosyalarını ve scriptleri asenkron (\`async/defer\`) olarak yükleyin. Statik HTML DOM eleman sayısını optimize ederek işlemcinin tarama iş yükünü asgariye indirin.
-*   **Yeşil Barındırma (Green Hosting)**: Sunucu altyapınızı %100 yenilenebilir enerji kullanan çevre dostu bir veri merkezine (ECO-datacenter) taşıyarak, temizleme sonrasında geriye kalan baz enerji emisyonunu sıfırlayın.
-
----
-*Sistem Bilgisi: Bu analiz veri paketinden **${bytesSavedKb} KB (%${savingPct})** ağırlık temizleyerek, yılda tahmini **${co2SavedGrams.toFixed(4)} gram CO₂** salınımını engellemiştir.*`;
-}
-
 /**
  * Connects with Gemini to analyze bloating trends on a target website and provide suggestions.
  */
@@ -73,8 +45,7 @@ export async function generateEcoReport(
 
   const client = getAiClient();
   if (!client) {
-    // Return high-fidelity fallback sandbox report if key is missing/placeholder
-    return getBeautifulFallbackReport(url, originalBytes, optimizedBytes, co2SavedGrams, savingPct, "Eko-Sandbox Modu");
+    throw new Error("AI_CLIENT_NOT_CONFIGURED");
   }
 
   try {
@@ -112,6 +83,6 @@ Reklam dilinden veya aşırı resmi olmayan geliştirici jargonundan kaçının.
     }
     
     // Fallback to high-fidelity local AI model outputs representation
-    return getBeautifulFallbackReport(url, originalBytes, optimizedBytes, co2SavedGrams, savingPct, "Otonom Süzgeç Modu");
+    throw new Error(`AI_GENERATION_FAILED: ${err.message}`);
   }
 }

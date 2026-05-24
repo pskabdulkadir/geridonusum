@@ -78,7 +78,6 @@ const TransactionSchema = new mongoose.Schema({
   proofHash: String,
   savedGrams: Number,
   txHash: String,
-  simulated: Boolean,
   timestamp: { type: Date, default: Date.now }
 });
 
@@ -501,7 +500,6 @@ app.post("/api/execute-payout", async (req, res) => {
         proofHash: item.proofHash,
         savedGrams: item.co2SavingsGrams,
         txHash: result.txHash,
-        simulated: false,
         timestamp: new Date().toISOString()
       };
       if (mongoose.connection.readyState === 1) {

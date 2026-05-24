@@ -12,7 +12,6 @@ export interface TransactionRecord {
   proofHash: string;
   savedGrams: number;
   txHash: string;
-  simulated: boolean;
   timestamp: string;
 }
 
