@@ -333,6 +333,9 @@ async function runRecyclingMining() {
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
         pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
+
+        // PROTOKOL_EXPORT: Varlığı anında kriptografik olarak mühürle ve dış pazarlara ihraç et
+        await broadcastToNetwork(generatedId);
       }
     });
   } catch (err: any) {
