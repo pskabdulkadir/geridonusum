@@ -112,7 +112,7 @@ export default function App() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 15000); // 15 saniyede bir güncelle
+    const interval = setInterval(fetchStats, 30000); // PROTOKOL: 30 saniyede bir güncelle
     return () => clearInterval(interval);
   }, []);
 
@@ -135,7 +135,7 @@ export default function App() {
   // Wallet balance otomatik yenileme (30 saniye)
   useEffect(() => {
     fetchWalletBalance();
-    const interval = setInterval(fetchWalletBalance, 30000);
+    const interval = setInterval(fetchWalletBalance, 60000); // PROTOKOL: 60 saniyede bir bakiye kontrolü
     return () => clearInterval(interval);
   }, []);
 

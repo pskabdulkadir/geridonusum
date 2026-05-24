@@ -143,6 +143,9 @@ export class WebCrawler {
     let crawledCount = 0;
 
     while (this.isRunning) {
+      // PROTOKOL_HIZ_SINIRI: Her döngü başında sunucunun nefes almasını sağla
+      await this.sleep(this.delayMs);
+
       // Robust empty queue protection - Re-enqueue seeds and reset visited list if exhausted
       if (this.queue.length === 0) {
         this.emitLog('CRAWLER', 'INFO', `Tarama kuyruğu temizlendi. Yeni döngü için tohumlar yeniden yükleniyor.`);
@@ -204,11 +207,6 @@ export class WebCrawler {
         } catch (optimizeError: any) {
           this.emitLog('SYSTEM', 'ERROR', `Optimizasyon motoru hatası (pasa geçiliyor): ${optimizeError.message}`);
         }
-      }
-
-      // Safe sleep mode - Energy preservation
-      if (this.isRunning) {
-        await this.sleep(this.delayMs);
       }
     }
 
