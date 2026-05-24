@@ -128,7 +128,11 @@ export class BlockchainRouter {
     try {
       // Ağ tipine göre uygun RPC terminalini seç (BSC veya Polygon)
       const rpc = network === 'bsc' ? 'https://bsc-dataseed.binance.org/' : (this.rpcUrl || 'https://polygon-rpc.com');
-      const provider = new ethers.providers.JsonRpcProvider(rpc);
+      // Render 502 hatalarını önlemek için kesin zaman aşımı (Timeout) ekle
+      const provider = new ethers.providers.JsonRpcProvider({
+        url: rpc,
+        timeout: 8000 // 8 saniye içinde cevap gelmezse iptal et
+      });
       const wallet = new ethers.Wallet(this.privateKey, provider);
       
       const balance = await provider.getBalance(wallet.address);

@@ -256,7 +256,7 @@ export default function App() {
       // BROWSER-SIDE WALLET (ALICI) ETKİLEŞİMİ
       if (!(window as any).ethereum) throw new Error("MetaMask bulunamadı.");
       
-      const provider = new (window as any).ethers.providers.Web3Provider((window as any).ethereum);
+      const provider = new ethers.providers.Web3Provider((window as any).ethereum);
       const { chainId } = await provider.getNetwork();
 
       // GÜVENLİK: Kullanıcının Polygon (137) ağında olduğundan emin ol

@@ -542,6 +542,11 @@ app.get("/api/stream-logs", (req, res) => {
     "Connection": "keep-alive"
   });
 
+  // Render/Proxy keep-alive: Bağlantının kopmasını önlemek için 15 saniyede bir boş veri gönder
+  const keepAlive = setInterval(() => {
+    res.write(': keep-alive\n\n');
+  }, 15000);
+
   // Pre-seed connection with previous logs history for UI continuity
   const history = serverState.crawlerLogs.slice(-40);
   for (const log of history) {
@@ -551,6 +556,7 @@ app.get("/api/stream-logs", (req, res) => {
   clients.add(res);
 
   req.on("close", () => {
+    clearInterval(keepAlive);
     clients.delete(res);
   });
 });
