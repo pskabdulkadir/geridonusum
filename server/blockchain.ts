@@ -60,9 +60,9 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
+    // ÜRETİM MODU KONTROLÜ
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
+      console.error("❌ CRITICAL: Üretim modunda geçerli bir PRIVATE_KEY tanımlanmalıdır!");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -71,21 +71,6 @@ export class BlockchainRouter {
 
   public registerLogger(cb: typeof this.logCallback) {
     this.logCallback = cb;
-  }
-
-  /**
-   * Cüzdan adresini döndür (PRIVATE_KEY'den türetilmiş)
-   */
-  public getWalletAddress(): string {
-    if (!this.privateKey || this.privateKey.includes('0xtest')) {
-      return "";
-    }
-    try {
-      const wallet = new ethers.Wallet(this.privateKey);
-      return wallet.address;
-    } catch {
-      return "";
-    }
   }
 
   private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {
@@ -121,33 +106,6 @@ export class BlockchainRouter {
   }
 
   /**
-   * Cüzdan bakiyesini kontrol eder ve üretim modu için kritik eşik uyarısı verir.
-   * Bu fonksiyon, ödeme emri öncesinde sistemin gas ücretini karşılayıp karşılayamayacağını denetler.
-   */
-  public async checkGasBalance(network: 'polygon' | 'bsc' = 'bsc'): Promise<{ balance: string, isLow: boolean }> {
-    try {
-      // Ağ tipine göre uygun RPC terminalini seç (BSC veya Polygon)
-      const rpc = network === 'bsc' ? 'https://bsc-dataseed.binance.org/' : (this.rpcUrl || 'https://polygon-rpc.com');
-      const provider = new ethers.providers.JsonRpcProvider(rpc);
-      const wallet = new ethers.Wallet(this.privateKey, provider);
-      
-      const balance = await provider.getBalance(wallet.address);
-      const balanceInEther = ethers.utils.formatEther(balance);
-      
-      const threshold = network === 'bsc' ? this.gasThresholds.bsc : this.gasThresholds.polygon;
-      const isLow = parseFloat(balanceInEther) < parseFloat(threshold);
-
-      if (isLow) {
-        this.emitLog('BLOCKCHAIN', 'WARNING', `DİKKAT: On-chain bakiye düşük (${balanceInEther} ${network === 'bsc' ? 'BNB' : 'POL'}).`);
-      }
-      return { balance: balanceInEther, isLow };
-    } catch (err) {
-      // PROTOKOL_3: Mock değerler yasaklandı.
-      throw new Error("BLOCKCHAIN_ACCESS_DENIED: On-chain bakiye sorgulanamadı.");
-    }
-  }
-
-  /**
    * Gas ücreti ödemeden (Gasless), satış emrini kriptografik olarak imzalar.
    */
   public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
@@ -174,29 +132,95 @@ export class BlockchainRouter {
   }
 
   /**
-   * Gerçek Satış İşlemi: CHANNEL_ROUTING_WALLET adresine gerçek bakiye transferi yapar.
+   * Cüzdan bakiyesini kontrol eder ve üretim modu için kritik eşik uyarısı verir.
    */
-  public async executeRealSale(amountStr: string): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ geçidi tetiklendi: Gerçek transfer emri hazırlanıyor...`);
+  public async checkGasBalance(network: 'polygon' | 'bsc' = 'bsc'): Promise<{ balance: string, isLow: boolean }> {
+    try {
+      // Ağ tipine göre uygun RPC terminalini seç
+      const rpc = network === 'bsc' 
+        ? 'https://bsc-dataseed.binance.org/' 
+        : (this.rpcUrl || 'https://polygon-rpc.com');
+        
+      const provider = new ethers.providers.JsonRpcProvider(rpc);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+      const balance = await provider.getBalance(wallet.address);
+      const balanceInEther = ethers.utils.formatEther(balance);
+      
+      const threshold = network === 'bsc' ? this.gasThresholds.bsc : this.gasThresholds.polygon;
+      const isLow = parseFloat(balanceInEther) < parseFloat(threshold);
+
+      if (isLow) {
+        this.emitLog('BLOCKCHAIN', 'WARNING', `DİKKAT: Üretim bakiyesi düşük (${balanceInEther} ${network === 'bsc' ? 'BNB' : 'POL'}). İşlemlerin aksamaması için bakiye ekleyin.`);
+      }
+      return { balance: balanceInEther, isLow };
+    } catch (err) {
+      return { balance: "0", isLow: true };
+    }
+  }
+
+  /**
+   * PROTOKOL_4: Aracı Komisyon Cüzdanı Mimarisi (Split Payout)
+   * Net gelir %90 Master Wallet'a, %10 Komisyon Wallet'a ardışık olarak gönderilir.
+   */
+  public async executeRealSale(amountStr: string): Promise<{ success: boolean; txHash?: string; error?: string; status?: 'PENDING' | 'REJECTED' }> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `[SPLIT_PAYOUT] Transfer emri bölüştürülüyor...`);
     
     try {
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+      const feeData = await provider.getFeeData(); // Güncel gas fiyatını al
       const wallet = new ethers.Wallet(this.privateKey, provider);
+      
+      // Adres Checksum Doğrulaması
+      const masterWallet = ethers.utils.getAddress(blockchainConfig.payoutWallet);
+      const commissionWallet = ethers.utils.getAddress(blockchainConfig.commissionWallet);
 
-      // İşlem öncesi BSC bakiye kontrolü
-      await this.checkGasBalance('bsc');
+      // Tutar Hesaplama
+      const totalWei = ethers.utils.parseEther(amountStr);
+      const commissionWei = totalWei.mul(Math.floor(blockchainConfig.commissionRate * 100)).div(100);
+      const netWei = totalWei.sub(commissionWei);
 
-      const tx = await wallet.sendTransaction({
-        to: blockchainConfig.payoutWallet,
-        value: ethers.utils.parseEther(amountStr),
-        gasLimit: 35000, // Güvenli üretim limiti
+      this.emitLog('BLOCKCHAIN', 'INFO', `Bölüştürme Detayları: Toplam: ${amountStr} | Komisyon (%10): ${ethers.utils.formatEther(commissionWei)} | Net (%90): ${ethers.utils.formatEther(netWei)}`);
+
+      // İki işlem için toplam gas maliyetini hesapla
+      const gasLimitPerTx = 45000; // Optimize edilmiş gas limiti
+      const totalGasEstimate = ethers.BigNumber.from(gasLimitPerTx).mul(2).mul(feeData.gasPrice || 5000000000);
+
+      const balance = await provider.getBalance(wallet.address);
+
+      // PROTOKOL_3: Gas ve Likidite Kontrolü
+      if (balance.lt(totalWei.add(totalGasEstimate))) {
+        return { 
+          success: false, 
+          status: 'PENDING', 
+          error: `TX_REJECTED: Yetersiz bakiye (Gerekli: ~${ethers.utils.formatEther(totalWei.add(totalGasEstimate))} BNB)` 
+        };
+      }
+
+      // 1. ADIM: Aracı Cüzdana Komisyon Gönderimi
+      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 1/2: Komisyon transferi başlatılıyor...`);
+      const txCommission = await wallet.sendTransaction({
+        to: commissionWallet,
+        value: commissionWei,
+        gasLimit: gasLimitPerTx,
+        gasPrice: feeData.gasPrice // Güncel gas fiyatını kullan
       });
+      const receiptComm = await txCommission.wait();
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[STEP_1_OK] Komisyon iletildi. Tx: ${txCommission.hash}`);
 
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ İşlem gönderildi, Hash: ${tx.hash}`);
-      return tx.hash;
+      // 2. ADIM: Kalan Bakiyenin Master Wallet'a Gönderimi
+      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 2/2: Net gelir master cüzdana sevk ediliyor...`);
+      const txNet = await wallet.sendTransaction({
+        to: masterWallet,
+        value: netWei,
+        gasLimit: gasLimitPerTx,
+        gasPrice: feeData.gasPrice // Güncel gas fiyatını kullan
+      });
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[STEP_2_OK] Net gelir iletildi. Tx: ${txNet.hash}`);
+
+      return { success: true, txHash: txNet.hash };
     } catch (err: any) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', `Satış hatası: ${this.parseBlockchainError(err)}`);
-      throw err;
+      this.emitLog('BLOCKCHAIN', 'ERROR', `[ROLLBACK_TRIGGERED] Payout başarısız: ${this.parseBlockchainError(err)}`);
+      return { success: false, status: 'REJECTED', error: this.parseBlockchainError(err) };
     }
   }
 

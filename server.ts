@@ -20,7 +20,7 @@ dotenv.config();
 // Modules
 import { BlockchainRouter } from "./server/blockchain.ts";
 import { DataOptimizer } from "./server/optimizer.ts";
-import { DataAnalyzer } from "./server/analyzer.ts"; // Yeni analiz motoru
+import { DataAnalyzer } from "./server/analyzer.ts";
 import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 import { WebCrawler } from "./server/crawler.ts";
@@ -160,19 +160,24 @@ async function checkMarketOpportunity() {
 }
 
 async function broadcastToNetwork(itemId: string) {
-  pushLog('BLOCKCHAIN', 'INFO', `[AĞ_YAYINI] ${itemId} nolu varlık için gerçek ödeme emri (Mainnet) iletiliyor...`);
+  pushLog('BLOCKCHAIN', 'INFO', `[PROTOKOL_ON_CHAIN] ${itemId} nolu varlık için gerçek ödeme emri (Mainnet) iletiliyor...`);
   try {
     const bnbAmount = "0.0005"; // Cüzdanına gönderilecek gerçek miktar
-    const txHash = await mainBlockchain.executeRealSale(bnbAmount);
+    const result = await mainBlockchain.executeRealSale(bnbAmount);
     
-    if (txHash) {
+    if (result.success && result.txHash) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[PROTOKOL_SUCCESS] TX_HASH: ${txHash} | STATUS: CONFIRMED`);
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[TX_SUCCESS] HASH: ${result.txHash} | STATUS: SPLIT_COMPLETE`);
+    } else if (result.status === 'PENDING') {
+      pushLog('BLOCKCHAIN', 'WARNING', `[PENDING_QUEUE] ${itemId} beklemeye alındı: ${result.error}`);
+    } else {
+      throw new Error(result.error);
     }
   } catch (err: any) {
+    const techError = err?.error?.message || err?.message || "Bilinmeyen Ağ Hatası";
     // PROTOKOL_5: Safeguard Modu
     serverState.isCrawling = false;
-    pushLog('SYSTEM', 'ERROR', `[SAFEGUARD_MODE] Kritik hata algılandı: ${err.message}. Tüm ticari işlemler donduruldu.`);
+    pushLog('SYSTEM', 'ERROR', `[SAFEGUARD_MODE] [REASON: ${techError}] - İşlemler donduruldu.`);
   }
 }
 
@@ -223,11 +228,11 @@ async function runRecyclingMining() {
       const optimizedHtml = mainOptimizer.optimizeHtml(html);
       const optimizedBytes = Buffer.byteLength(optimizedHtml);
       
-      // PROTOKOL_1: Otonom Matematiksel Analiz
+      // PROTOKOL_1: Otonom Analiz (70 Puan Eşiği)
       const qualityScore = DataAnalyzer.calculateQualityScore(html);
       
       if (qualityScore < 70) {
-        pushLog('MARKET', 'WARNING', `[DISCARDED] Düğüm atıldı: Kalite puanı yetersiz (${qualityScore}/100) - Dijital Atık.`);
+        pushLog('MARKET', 'WARNING', `[DISCARDED] Düğüm atıldı: Kalite puanı yetersiz (${qualityScore}/100).`);
         return;
       }
 
@@ -405,29 +410,28 @@ app.post("/api/execute-payout", async (req, res) => {
 
   // Execute BSC transfer via the blockchain router
   try {
-    const txHash = await mainBlockchain.executeRealSale(bnbAmount);
+    const result = await mainBlockchain.executeRealSale(bnbAmount);
 
-    const record: TransactionRecord = {
-      url: item.url,
-      proofHash: item.proofHash,
-      savedGrams: item.co2SavingsGrams,
-      txHash: txHash,
-      simulated: false,
-      timestamp: new Date().toISOString()
-    };
-
-    if (mongoose.connection.readyState === 1) {
-      await TransactionModel.create(record);
+    if (result.success && result.txHash) {
+      const record: TransactionRecord = {
+        url: item.url,
+        proofHash: item.proofHash,
+        savedGrams: item.co2SavingsGrams,
+        txHash: result.txHash,
+        simulated: false,
+        timestamp: new Date().toISOString()
+      };
+      if (mongoose.connection.readyState === 1) {
+        await TransactionModel.create(record);
+      }
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[TX_SUCCESS] HASH: ${result.txHash} | TOTAL: ${bnbAmount} BNB | STATUS: SPLIT_COMPLETE`);
+      res.json({ success: true, item, transaction: record });
+    } else if (result.status === 'PENDING') {
+      pushLog('BLOCKCHAIN', 'WARNING', `[PENDING_QUEUE] ${item.id} beklemeye alındı: ${result.error}`);
+      res.status(202).json({ success: false, error: result.error, status: 'PENDING' });
     } else {
-      pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. İşlem kaydı yapılamadı.');
+      throw new Error(result.error);
     }
-
-    pushLog('BLOCKCHAIN', 'SUCCESS', `[ÖDEME_TAMAMLANDI] BSC Ana Ağı üzerinden ${bnbAmount} BNB başarıyla ${serverState.payoutWalletAddress} cüzdanına transfer edildi.`);
-    pushLog('SYSTEM', 'SUCCESS', `[ZİNCİR_KAYDI_OK] İşlem Kodu: ${txHash}`);
-    
-    pushLog('AI', 'SUCCESS', `[READY_TO_SELL] "${item.id}" nolu paket verisi alıcıya serbest bırakıldı.`);
-    
-    res.json({ success: true, item, transaction: record });
   } catch (err: any) {
     // Hata durumunda satış durumunu geri al
     if (mongoose.connection.readyState === 1) {

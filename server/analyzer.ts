@@ -18,7 +18,7 @@ export class DataAnalyzer {
     else if (length > 5000) score += 15;
 
     // 2. Structural Density Analysis (Max 30 pts)
-    // Lower tag density usually means higher semantic value for AI training data
+    // Lower tag density usually means higher semantic value
     const tagCount = (html.match(/<[^>]*>/g) || []).length;
     const tagRatio = tagCount / length;
     if (tagRatio < 0.02) score += 30;

@@ -259,7 +259,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Ödeme tahsilatı başarısız oldu:", err);
+      console.error("Ödeme tahsilatı başarısız oldu:", err.message);
     } finally {
       setPurchaseInProgress(null);
     }
