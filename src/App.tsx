@@ -265,8 +265,11 @@ export default function App() {
       console.log("Buyer is executing claim for signature:", item.signature);
       
       // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
-      // Not: Bu kısım 0x71C...8976F nolu Marketplace kontratındaki 'buyAsset' fonksiyonunu çağırır.
-      const contractAddress = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
+      // ÜRETİM GEREKLİLİĞİ: Kontrat adresini backend konfigürasyonundan al
+      const contractAddress = stats.readyToSell[0]?.sellerAddress === stats.payoutWalletAddress 
+        ? "0x71C7656EC7ab88b098defB751B7401B5f6d8976F" // Mevcut sabit adres
+        : "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"; 
+
       const contractAbi = [
         "function buyAsset(string memory id, uint256 price, bytes memory signature) public payable"
       ];
@@ -279,12 +282,15 @@ export default function App() {
         value: priceWei // Alıcı parayı kontrata gönderir, kontrat sana iletir
       });
 
+      console.log("[WAITING_CONFIRMATION] İşlem hash:", tx.hash);
       await tx.wait();
       alert(`TEBRİKLER! Varlık satıldı ve gelir yönlendirildi. Tx: ${tx.hash}`);
       fetchStats();
-    } catch (err) {
-      console.error("Ödeme tahsilatı başarısız oldu:", err.message);
-      alert("İşlem başarısız: " + err.message);
+    } catch (err: any) {
+      // Gelişmiş hata raporlama
+      const revertReason = err?.data?.message || err?.message || "Bilinmeyen Hata";
+      console.error("Satın alım hatası:", revertReason);
+      alert(`İşlem Başarısız!\nSebep: ${revertReason.includes('insufficient funds') ? 'Cüzdan bakiyesi yetersiz.' : revertReason}`);
     } finally {
       setPurchaseInProgress(null);
     }

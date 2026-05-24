@@ -116,11 +116,12 @@ export class BlockchainRouter {
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
       const wallet = new ethers.Wallet(this.privateKey, provider);
 
+      const network = await provider.getNetwork();
       // Domain Separator (Kontrat ile eşleşmeli)
       const domain = {
         name: "InternetReclamationMarket",
         version: "1",
-        chainId: 137, // Polygon Mainnet
+        chainId: network.chainId, // Dinamik Zincir Kimliği
         verifyingContract: this.contractAddress
       };
 
