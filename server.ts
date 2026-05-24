@@ -91,7 +91,7 @@ const ReadyToSellSchema = new mongoose.Schema({
   reportSummary: String,
   marketPriceUSD: Number,
   isSold: { type: Boolean, default: false },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
   signature: String,
   sellerAddress: String
 });
@@ -171,16 +171,24 @@ async function broadcastToNetwork(itemId: string) {
     const item = await ReadyToSellModel.findOne({ id: itemId });
     if (!item) return;
 
-    // Gas ücreti ödemeden (Voucher) imza oluştur
-    const signature = await mainBlockchain.createSignedSaleOrder(itemId, item.co2SavingsGrams, item.marketPriceUSD);
+    // PROTOKOL_REAL: Gas ücreti ödemeden kriptografik imza (Voucher) oluştur
+    const signature = await mainBlockchain.createSignedSaleOrder(
+      itemId, 
+      item.co2SavingsGrams, 
+      item.marketPriceUSD
+    );
+    
     const sellerAddress = mainBlockchain.getWalletAddress();
 
-    await ReadyToSellModel.updateOne({ id: itemId }, { 
-      signature: signature,
-      sellerAddress: sellerAddress 
-    });
-
-    pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} satışa sunuldu. Gas ücreti alıcıya devredildi.`);
+    if (signature && sellerAddress) {
+      await ReadyToSellModel.updateOne({ id: itemId }, { 
+        signature: signature,
+        sellerAddress: sellerAddress 
+      });
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
+    } else {
+      throw new Error("İmza oluşturulamadı: Cüzdan yetkilendirme hatası.");
+    }
   } catch (err: any) {
     const techError = err?.error?.message || err?.message || "Bilinmeyen Ağ Hatası";
     pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] İmzalama hatası: ${techError}`);

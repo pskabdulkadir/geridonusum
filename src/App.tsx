@@ -264,14 +264,23 @@ export default function App() {
       // Bu kısım gerçek kontrat ABI'si ve buyAsset fonksiyonu ile entegre edilir
       console.log("Buyer is executing claim for signature:", item.signature);
       
-      // On-chain işlem simülasyonu (Alıcı gas öder)
-      const tx = await signer.sendTransaction({
-        to: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", // Marketplace Kontratı
-        value: (window as any).ethers.utils.parseEther("0.0005") // Fiyat
+      // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
+      // Not: Bu kısım 0x71C...8976F nolu Marketplace kontratındaki 'buyAsset' fonksiyonunu çağırır.
+      const contractAddress = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
+      const contractAbi = [
+        "function buyAsset(bytes32 id, uint256 price, bytes signature) public payable"
+      ];
+      
+      const contract = new (window as any).ethers.Contract(contractAddress, contractAbi, signer);
+      const priceWei = (window as any).ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
+      const idBytes32 = (window as any).ethers.utils.formatBytes32String(item.id);
+
+      const tx = await contract.buyAsset(idBytes32, priceWei, item.signature, {
+        value: priceWei // Alıcı parayı kontrata gönderir, kontrat sana iletir
       });
 
       await tx.wait();
-      alert(`Satın alım başarılı! Tx: ${tx.hash}`);
+      alert(`TEBRİKLER! Varlık satıldı ve gelir yönlendirildi. Tx: ${tx.hash}`);
       fetchStats();
     } catch (err) {
       console.error("Ödeme tahsilatı başarısız oldu:", err.message);
