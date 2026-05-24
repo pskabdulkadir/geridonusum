@@ -169,19 +169,13 @@ async function broadcastToNetwork(itemId: string) {
     const bnbAmount = "0.0005"; // Cüzdanına gönderilecek gerçek miktar
     const result = await mainBlockchain.executeRealSale(bnbAmount);
     
-    // Otonom mod aktifse ve alıcı ödemeli protokol seçildiyse doğrudan hazırla
-    if (serverState.autonomousMode) {
-      pushLog('MARKET', 'SUCCESS', `[AUTONOMOUS_PUSH] ${itemId} varlığı toplu satış havuzuna eklendi.`);
-      // Gerçek bir alıcı işlemi gelene kadar veritabanında PENDING kalır, 
-      // ancak basılan kanıt (PoC) sayacını otonom olarak simüle edebiliriz 
-      // veya gerçek kontrat event'ini bekleyebiliriz.
-    }
-
+    const result = await mainBlockchain.executeRealSale(bnbAmount);
+    
     if (result.success && result.txHash) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[TX_SUCCESS] HASH: ${result.txHash} | STATUS: SPLIT_COMPLETE`);
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[CONFIRMED] Varlık blokzincirinde satıldı. Hash: ${result.txHash}`);
     } else if (result.status === 'PENDING') {
-      pushLog('BLOCKCHAIN', 'WARNING', `[PENDING_QUEUE] ${itemId} beklemeye alındı: Alıcının işlemi bekleniyor.`);
+      pushLog('BLOCKCHAIN', 'WARNING', `[QUEUED] İşlem beklemede (Bakiye/Onay): ${result.error}`);
     } else {
       throw new Error(result.error);
     }

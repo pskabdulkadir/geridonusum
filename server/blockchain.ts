@@ -176,12 +176,60 @@ export class BlockchainRouter {
   }
 
   /**
-   * [DEPRECATED] executeRealSale artık pasifize edilmiştir.
-   * Yeni Protokol: Gas-on-Purchase (Alıcı Ödemeli Satın Alım).
+   * PROTOKOL_4: Aracı Komisyon Cüzdanı Mimarisi (Split Payout) - REAL MODE
+   * Bu fonksiyon simülasyondan çıkarıldı. Artık gerçek transferleri yönetir.
    */
   public async executeRealSale(amountStr: string): Promise<{ success: boolean; txHash?: string; error?: string; status?: 'PENDING' | 'REJECTED' }> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `[PASIF_MOD] Otomatik split payout devre dışı. Alıcı tetiklemesi bekleniyor.`);
-    return { success: false, status: 'PENDING', error: "Manual buyer action required." };
+    this.emitLog('BLOCKCHAIN', 'INFO', `[PROTOKOL_ON_CHAIN] Gerçek Mainnet transferi imzalanıyor...`);
+    
+    try {
+      if (!this.isRealMode) throw new Error("Üretim modu aktif değil. PRIVATE_KEY eksik.");
+
+      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+      const feeData = await provider.getFeeData();
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+      
+      const masterWallet = ethers.utils.getAddress(blockchainConfig.payoutWallet);
+      const commissionWallet = ethers.utils.getAddress(blockchainConfig.commissionWallet);
+
+      const totalWei = ethers.utils.parseEther(amountStr);
+      const commissionWei = totalWei.mul(Math.floor(blockchainConfig.commissionRate * 100)).div(100);
+      const netWei = totalWei.sub(commissionWei);
+
+      // Bakiye Kontrolü (Gas + Tutar)
+      const balance = await provider.getBalance(wallet.address);
+      const gasLimit = 45000;
+      const totalCost = totalWei.add(feeData.gasPrice?.mul(gasLimit) || 0);
+
+      if (balance.lt(totalCost)) {
+        return { success: false, status: 'PENDING', error: `Yetersiz bakiye. Gerekli: ${ethers.utils.formatEther(totalCost)} BNB` };
+      }
+
+      // Gerçek Transfer: Komisyon
+      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 1/2: Komisyon transferi gönderiliyor...`);
+      const txComm = await wallet.sendTransaction({
+        to: commissionWallet,
+        value: commissionWei,
+        gasLimit
+      });
+      await txComm.wait();
+
+      // Gerçek Transfer: Net Gelir
+      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 2/2: Net gelir master cüzdana sevk ediliyor...`);
+      const txNet = await wallet.sendTransaction({
+        to: masterWallet,
+        value: netWei,
+        gasLimit
+      });
+      
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ [TX_SUCCESS] İşlem onaylandı: ${txNet.hash}`);
+      return { success: true, txHash: txNet.hash };
+
+    } catch (err: any) {
+      const parsedMsg = this.parseBlockchainError(err);
+      this.emitLog('BLOCKCHAIN', 'ERROR', `[ROLLBACK] İşlem başarısız: ${parsedMsg}`);
+      return { success: false, status: 'REJECTED', error: parsedMsg };
+    }
   }
 
   /**
