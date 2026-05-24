@@ -263,7 +263,12 @@ async function broadcastToAllMarkets(item: any) {
                 await axios.post(channel.url, payload, { timeout: 10000 });
             }
 
-            pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
+            if (channel.name === "GoogleSheets") {
+                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] Veri aktarım sinyali gönderildi (Google Sheets).`);
+            } else {
+                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
+            }
+            
         } catch (err: any) {
             pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);
         }

@@ -35,7 +35,7 @@ export const blockchainConfig = {
     oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/publish',
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
     openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
-    googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxELUhBg5SKEQ4pWD21fhRfrJSL8HXKC3uoi0cHauoIea_StW02kkW_JbuC61spVLva/exec'
+    googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxmke0-Fu1FuY0_W6dliNvjm7eH9tOlW2tfOzxJgkEZr2uLY7FIPZ4iDKmn1ZSoV8vo/exec'
 };
 
 export const dbConfig = {
