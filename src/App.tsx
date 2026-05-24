@@ -91,27 +91,28 @@ export default function App() {
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Poll server state API for dynamic dashboard synchronization
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch("/api/stats");
-        const contentType = response.headers.get("content-type");
-        if (response.ok && contentType && contentType.includes("application/json")) {
-          const data = await response.json();
-          setStats(data);
-        } else {
-          const isHtml = contentType && contentType.includes("text/html");
-          console.warn("[FETCH] Received non-JSON or stale response from server", {
-            status: response.status,
-            contentType,
-            isHtml
-          });
-        }
-      } catch (err) {
-        console.error("Failed to fetch statistics from backend:", err);
+  const fetchStats = async () => {
+    try {
+      const response = await fetch("/api/stats");
+      const contentType = response.headers.get("content-type");
+      if (response.ok && contentType && contentType.includes("application/json")) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        const isHtml = contentType && contentType.includes("text/html");
+        console.warn("[FETCH] Received non-JSON or stale response from server", {
+          status: response.status,
+          contentType,
+          isHtml
+        });
       }
-    };
+    } catch (err) {
+      console.error("Failed to fetch statistics from backend:", err);
+    }
+  };
 
+  // Poll server state API for dynamic dashboard synchronization
+  useEffect(() => {
     fetchStats();
     const interval = setInterval(fetchStats, 30000); // PROTOKOL: 30 saniyede bir güncelle
     return () => clearInterval(interval);
