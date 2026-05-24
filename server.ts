@@ -322,7 +322,8 @@ async function runRecyclingMining() {
       };
 
       if (mongoose.connection.readyState === 1) {
-        await ReadyToSellModel.create(newItem);
+        const savedDoc = await ReadyToSellModel.create(newItem);
+        pushLog('SYSTEM', 'SUCCESS', `[DB_COMMIT] Varlık Atlas Cluster'a mühürlendi: ${savedDoc.id}`);
 
         // --- PAZAR YERİ LİSTELEME (OFF-CHAIN / GASLESS) ---
         const result = await mainMarketplace.prepareAssetForSale(generatedId, valuation);

@@ -187,7 +187,14 @@ export class BlockchainRouter {
       };
 
       const signature = await wallet._signTypedData(domain, types, value);
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Dijital mühür başarıyla oluşturuldu.`);
+      
+      // AUDIT: İmza Geçerlilik Denetimi (EIP-712 Standardı)
+      const recoveredAddress = ethers.utils.verifyTypedData(domain, types, value, signature);
+      const isAuthentic = recoveredAddress.toLowerCase() === wallet.address.toLowerCase();
+      
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Mühür mülkiyeti doğrulandı: ${isAuthentic ? 'GEÇERLİ (VALID)' : 'GEÇERSİZ'}`);
+      this.emitLog('BLOCKCHAIN', 'ANALYZE', `[TRACE] Recovered Signer: ${recoveredAddress.slice(0, 10)}...`);
+      
       return signature;
     } catch (err: any) {
       throw new Error(`EIP-712 imzalama hatası: ${err.message}`);

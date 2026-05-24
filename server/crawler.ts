@@ -95,6 +95,10 @@ export class WebCrawler {
         return { html: '', links: [] };
       }
 
+      // AUDIT: Gerçek HTTP isteği kanıtı (Wikimedia Sunucu Yanıtı)
+      const traceInfo = `Server: ${response.headers['server']} | Cache: ${response.headers['x-cache']} | Date: ${response.headers['date']}`;
+      this.emitLog('CRAWLER', 'ANALYZE', `[NET_TRACE] ${currentUrl} -> ${traceInfo}`);
+
       const $ = cheerio.load(html);
       const links: string[] = [];
 
