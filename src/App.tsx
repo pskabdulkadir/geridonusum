@@ -268,14 +268,14 @@ export default function App() {
       // Not: Bu kısım 0x71C...8976F nolu Marketplace kontratındaki 'buyAsset' fonksiyonunu çağırır.
       const contractAddress = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
       const contractAbi = [
-        "function buyAsset(bytes32 id, uint256 price, bytes signature) public payable"
+        "function buyAsset(string memory id, uint256 price, bytes memory signature) public payable"
       ];
       
       const contract = new (window as any).ethers.Contract(contractAddress, contractAbi, signer);
       const priceWei = (window as any).ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
-      const idBytes32 = (window as any).ethers.utils.formatBytes32String(item.id);
 
-      const tx = await contract.buyAsset(idBytes32, priceWei, item.signature, {
+      // Gas-on-Purchase: İşlemi alıcı (MetaMask sahibi) başlatır ve gas'ı öder.
+      const tx = await contract.buyAsset(item.id, priceWei, item.signature, {
         value: priceWei // Alıcı parayı kontrata gönderir, kontrat sana iletir
       });
 

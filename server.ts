@@ -93,7 +93,8 @@ const ReadyToSellSchema = new mongoose.Schema({
   isSold: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
   signature: String,
-  sellerAddress: String
+  sellerAddress: String,
+  valuationWei: String // Kontrat için hassas fiyat verisi
 });
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);

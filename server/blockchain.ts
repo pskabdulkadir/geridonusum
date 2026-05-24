@@ -106,25 +106,42 @@ export class BlockchainRouter {
   }
 
   /**
-   * Gas ücreti ödemeden (Gasless), satış emrini kriptografik olarak imzalar.
+   * PROTOKOL_REAL: EIP-712 Standartlarında yapılandırılmış satış emri imzalar.
+   * Bu imza, alıcı tarafından 'buyAsset' fonksiyonunda kullanılır.
    */
   public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Satış emri imzalanıyor: ${itemId}...`);
+    this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Satış emri mühürleniyor: ${itemId}...`);
     
     try {
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
       const wallet = new ethers.Wallet(this.privateKey, provider);
 
-      const message = JSON.stringify({
-        action: "SELL_RECLAMATION_DATA",
-        id: itemId,
-        amount: amount,
-        price: price,
-        timestamp: Date.now()
-      });
+      // Domain Separator (Kontrat ile eşleşmeli)
+      const domain = {
+        name: "InternetReclamationMarket",
+        version: "1",
+        chainId: 137, // Polygon Mainnet
+        verifyingContract: this.contractAddress
+      };
 
-      const signature = await wallet.signMessage(message);
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `İşlem başarıyla imzalandı. Sunucuya iletiliyor.`);
+      // Veri Yapısı (Types)
+      const types = {
+        AssetSale: [
+          { name: "id", type: "string" },
+          { name: "price", type: "uint256" },
+          { name: "seller", type: "address" }
+        ]
+      };
+
+      // Veri (Value)
+      const value = {
+        id: itemId,
+        price: ethers.utils.parseUnits(price.toFixed(18), 18),
+        seller: wallet.address
+      };
+
+      const signature = await wallet._signTypedData(domain, types, value);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Dijital mühür başarıyla oluşturuldu.`);
       return signature;
     } catch (err: any) {
       throw new Error(`İmzalama hatası: ${err.message}`);
