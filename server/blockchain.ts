@@ -62,7 +62,7 @@ export class BlockchainRouter {
 
     // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      console.error("❌ KRITIK: PRIVATE_KEY eksik veya hatalı!");
+      this.emitLog('SYSTEM', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -135,7 +135,7 @@ export class BlockchainRouter {
    * Gerçek Satış İşlemi: CHANNEL_ROUTING_WALLET adresine gerçek bakiye transferi yapar.
    */
   public async executeRealSale(amountStr: string): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ üzerinde transfer başlatılıyor...`);
+    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ geçidi tetiklendi: Gerçek transfer emri hazırlanıyor...`);
     
     try {
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
@@ -147,7 +147,7 @@ export class BlockchainRouter {
       const tx = await wallet.sendTransaction({
         to: blockchainConfig.payoutWallet,
         value: ethers.utils.parseEther(amountStr),
-        gasLimit: 21000, // Standart transfer için 21k yeterlidir
+        gasLimit: 35000, // Güvenli üretim limiti
       });
 
       this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ İşlem gönderildi, Hash: ${tx.hash}`);

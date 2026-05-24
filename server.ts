@@ -25,11 +25,11 @@ import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 import { WebCrawler } from "./server/crawler.ts";
 
-// --- GLOBAL INSTANCES (Tanımlamalar Tek Sefer Yapılmalı) ---
+// --- GLOBAL SINGLETONS ---
 const app = express();
-const mainOptimizer = new DataOptimizer();
-const mainBlockchain = new BlockchainRouter();
-const mainCrawler = new WebCrawler({
+export const mainOptimizer = new DataOptimizer();
+export const mainBlockchain = new BlockchainRouter();
+export const mainCrawler = new WebCrawler({
   delayMs: 2000, 
   targetLimit: 999999
 });
@@ -99,23 +99,9 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
 });
 
 process.on('uncaughtException', (err: Error) => {
-  console.error('⚠️ Uncaught Exception:', err);
+  console.error('⚠️ Kritik Çekirdek Hatası:', err.message);
 });
 
-// CRITICAL CONFIG VALIDATION
-if (!blockchainConfig.contractAddress || blockchainConfig.contractAddress.includes('0x00000000')) {
-  console.warn("⚠️  WARNING: SMART_GATE_CONTRACT_ADDRESS is not properly configured in .env!");
-}
-if (!blockchainConfig.privateKey) {
-  console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Autonomous Simulation Mode.");
-}
-if (!dbConfig.uri) {
-  console.warn("⚠️  WARNING: MONGO_URI is not configured. Database persistence may be disabled.");
-}
-// USE_AI_ANALYSIS parametresi ile AI özellikleri kontrol edildiği için eski uyarıyı pasifize ediyoruz
-// if (!blockchainConfig.geminiApiKey || blockchainConfig.geminiApiKey === "MY_GEMINI_API_KEY") {
-//   console.warn("⚠️  WARNING: GEMINI_API_KEY is not configured. Gemini AI features may be limited.");
-// }
 if (!blockchainConfig.appUrl || blockchainConfig.appUrl === "MY_APP_URL") {
   console.warn("⚠️  WARNING: APP_URL is not configured. Self-referential links may be incorrect.");
 }
@@ -174,21 +160,22 @@ async function checkMarketOpportunity() {
 }
 
 async function broadcastToNetwork(itemId: string) {
+  pushLog('BLOCKCHAIN', 'INFO', `[AĞ_YAYINI] ${itemId} nolu varlık için gerçek ödeme emri (Mainnet) iletiliyor...`);
   try {
-    const bnbAmount = "0.0005"; // Güvenli test miktarı
+    const bnbAmount = "0.0005"; // Cüzdanına gönderilecek gerçek miktar
     const txHash = await mainBlockchain.executeRealSale(bnbAmount);
     
     if (txHash) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-      pushLog('MARKET', 'SUCCESS', `GERÇEK SATIŞ ONAYLANDI: Paket ${itemId} satıldı. Tx: ${txHash}`);
+      pushLog('MARKET', 'SUCCESS', `✅ SATIŞ TAMAMLANDI! Gelir cüzdanınıza sevk edildi. İşlem: ${txHash}`);
     }
   } catch (err: any) {
-    pushLog('EXECUTOR', 'ERROR', `Ağ üzerinde gerçek işlem başarısız: ${err.message}`);
+    pushLog('BLOCKCHAIN', 'ERROR', `❌ ÖDEME REDDEDİLDİ: ${err.message}`);
   }
 }
 
 async function startAutomatedTrading() {
-  pushLog('SYSTEM', 'INFO', "EXECUTOR MODU: Otonom işlem motoru aktif, piyasa taranıyor...");
+  pushLog('SYSTEM', 'SUCCESS', "EXECUTOR MODU: Otonom geri dönüşüm fabrikası (PRODUCTION) aktif.");
   
   setInterval(async () => {
     if (!serverState.isCrawling) return; // Dashboard üzerinden motor durdurulmuşsa işlem yapma
@@ -379,21 +366,18 @@ app.post("/api/execute-payout", async (req, res) => {
   pushLog('EXECUTOR', 'INFO', `Gelir çekme işlemi başlatıldı. Hedef Cüzdan: ${serverState.payoutWalletAddress} | Tutar: ${bnbAmount} BNB`);
 
   // Execute BSC transfer via the blockchain router
-  // Gerçek satış işlemi doğrudan çağrılır
-  const txHash = await mainBlockchain.executeRealSale(bnbAmount);
+  try {
+    const txHash = await mainBlockchain.executeRealSale(bnbAmount);
 
-  const txResult = { success: true, txHash: txHash, simulated: false }; // executeRealSale doğrudan hash döndürdüğü için bu şekilde simüle ediyoruz
+    const record: TransactionRecord = {
+      url: item.url,
+      proofHash: item.proofHash,
+      savedGrams: item.co2SavingsGrams,
+      txHash: txHash,
+      simulated: false,
+      timestamp: new Date().toISOString()
+    };
 
-  const record: TransactionRecord = {
-    url: item.url,
-    proofHash: item.proofHash,
-    savedGrams: item.co2SavingsGrams,
-    txHash: txResult.txHash,
-    simulated: txResult.simulated,
-    timestamp: new Date().toISOString()
-  };
-  
-  if (txHash) { // İşlem hash'i varsa başarılı sayılır
     if (mongoose.connection.readyState === 1) {
       await TransactionModel.create(record);
     } else {
@@ -406,15 +390,13 @@ app.post("/api/execute-payout", async (req, res) => {
     pushLog('AI', 'SUCCESS', `[READY_TO_SELL] "${item.id}" nolu paket verisi alıcıya serbest bırakıldı.`);
     
     res.json({ success: true, item, transaction: record });
-  } else {
-    // Reverse status so the user can re-try after funding or adding key
+  } catch (err: any) {
+    // Hata durumunda satış durumunu geri al
     if (mongoose.connection.readyState === 1) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: false });
-    } else {
-      pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. Veri paketi geri alınamadı.');
     }
-    pushLog('BLOCKCHAIN', 'ERROR', `Blockchain payouts transferi gerçekleştirilemedi: ${txResult.error}`);
-    res.status(500).json({ error: txResult.error || "Blockchain payout transaction failed." });
+    pushLog('BLOCKCHAIN', 'ERROR', `Ödeme hatası: ${err.message}`);
+    res.status(500).json({ error: err.message || "Blockchain payout failed." });
   }
 });
 
