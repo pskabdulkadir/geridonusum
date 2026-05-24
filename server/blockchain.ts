@@ -142,7 +142,8 @@ export class BlockchainRouter {
       }
       return { balance: balanceInEther, isLow };
     } catch (err) {
-      throw new Error("BLOCKCHAIN_CONNECTIVITY_LOST: On-chain bakiye sorgulanamadı.");
+      // HATA KORUMASI: RPC hatası 500 döndürmemeli, sadece bakiyeyi 0 göstermeli
+      return { balance: "0.000000", isLow: true };
     }
   }
 

@@ -42,7 +42,7 @@ const crawlerSeeds = [
   "https://wikipedia.org",
   "https://html.spec.whatwg.org",
   "https://www.w3.org/Consortium/mission",
-  "https://developer.mozilla.org/en-US/docs/Web/Sustainability"
+  "https://en.wikipedia.org/wiki/Sustainable_computing"
 ];
 
 // 2. ATIK TANIMI & FİLTRELEME KRİTERLERİ
@@ -217,7 +217,12 @@ async function broadcastToAllMarkets(item: any) {
         { name: "OceanProtocol", url: blockchainConfig.oceanProtocolUrl },
         { name: "CustomMarket", url: blockchainConfig.marketplaceApiUrl },
         { name: "Middleware (Make.com)", url: blockchainConfig.middlewareWebhookUrl }
-    ].filter(c => c.url && !c.url.includes('your-webhook-id') && !c.url.includes('api.gercek-veri-borsasi.com'));
+    ].filter(c => 
+        c.url && 
+        !c.url.includes('your-webhook-id') && 
+        !c.url.includes('api.gercek-veri-borsasi.com') &&
+        !c.url.includes('ocean.api') // Oceanplaceholder'ı filtrele
+    );
 
     const broadcastPromises = channels.map(async (channel) => {
         try {
