@@ -24,11 +24,13 @@ import { DataAnalyzer } from "./server/analyzer.ts";
 import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 import { WebCrawler } from "./server/crawler.ts";
+import { MarketplaceManager } from "./server/marketplace.ts";
 
 // --- GLOBAL SINGLETONS ---
 const app = express();
 export const mainOptimizer = new DataOptimizer();
 export const mainBlockchain = new BlockchainRouter();
+export const mainMarketplace = new MarketplaceManager();
 export const mainCrawler = new WebCrawler({
   delayMs: 2000, 
   targetLimit: 999999
@@ -257,6 +259,13 @@ async function runRecyclingMining() {
 
       if (mongoose.connection.readyState === 1) {
         await ReadyToSellModel.create(newItem);
+
+        // --- PAZAR YERİ LİSTELEME (ON-CHAIN) ---
+        const listingTx = await mainMarketplace.listAssetOnMarket(generatedId, valuation);
+        if (listingTx) {
+          pushLog('BLOCKCHAIN', 'SUCCESS', `[ASSET_LISTED] Varlık blokzinciri pazar yerinde aktif. Tx: ${listingTx}`);
+        }
+
         serverState.pagesProcessed++;
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
@@ -269,6 +278,10 @@ async function runRecyclingMining() {
 }
 
 mainBlockchain.registerLogger((module, level, msg) => {
+  pushLog(module, level, msg);
+});
+
+mainMarketplace.registerLogger((module, level, msg) => {
   pushLog(module, level, msg);
 });
 
