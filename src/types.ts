@@ -42,6 +42,8 @@ export interface CoreStats {
   currentCrawlingUrl: string;
   readyToSell: ReadyToSellItem[];
   payoutWalletAddress: string;
+  autonomousMode: boolean;
+  commitThreshold: number;
   // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
 

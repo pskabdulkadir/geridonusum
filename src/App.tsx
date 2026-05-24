@@ -65,6 +65,7 @@ export default function App() {
   const [isUpdatingWallet, setIsUpdatingWallet] = useState<boolean>(false);
   const [walletSaveSuccess, setWalletSaveSuccess] = useState<boolean>(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null); // Sadece manuel tetikleme için
+  const [adminCommand, setAdminCommand] = useState<string>("");
 
   // Wallet Balance State
   const [walletBalance, setWalletBalance] = useState<{
@@ -263,6 +264,32 @@ export default function App() {
     } finally {
       setPurchaseInProgress(null);
     }
+  };
+
+  // Toplu Onay (Publish All) Tetikleyici
+  const handlePublishAll = async () => {
+    try {
+      const res = await fetch("/api/market/publish-all", { method: "POST" });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Yönetici Komutu Gönder
+  const handleSendCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/admin/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: adminCommand })
+      });
+      if (res.ok) {
+        setAdminCommand("");
+        fetchStats();
+      }
+    } catch (err) { console.error(err); }
   };
 
   // Log module custom styling mapper
@@ -1106,9 +1133,9 @@ export default function App() {
                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/80">
                       <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider text-amber-500 flex items-center gap-1.5">
                         <Database className="w-4.5 h-4.5 text-amber-500" />
-                        SALES_QUEUE / HAZIR ENVANTER VERİTABANI ({stats.readyToSell?.filter(x => !x.isSold).length || 0})
+                        PENDING_QUEUE / HAZIR ENVANTER ({stats.readyToSell?.filter(x => !x.isSold).length || 0})
                       </h4>
-                      <span className="text-[10px] font-mono text-slate-500">MÜHÜRLÜ EKO-VERİDOSYALARI</span>
+                      <button onClick={handlePublishAll} className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded hover:bg-emerald-900 transition-all cursor-pointer">PUBLISH ALL (THE PUSH)</button>
                     </div>
 
                     <p className="text-xs text-slate-400 mb-4 leading-relaxed">
@@ -1217,6 +1244,23 @@ export default function App() {
                       <span>"ÖDEMEYİ AL" butonunu tetiklediğinizde, alıcının akıllı kontrata (0x71...) yatırdığı USDT/POL/ETH bedeli anında süzülerek tanımlamış olduğunuz payouts yönlendirme cüzdan adresinize gazsız (Zero-Gas) ve anlık transfer olarak iletilir.</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Otonom Komut Paneli */}
+              <div className="lg:col-span-12 mt-6">
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                    <h4 className="text-xs font-mono text-cyan-400 mb-3 uppercase tracking-widest">Master Protokol Komut Girişi</h4>
+                    <form onSubmit={handleSendCommand} className="flex gap-3">
+                        <input 
+                            type="text" 
+                            value={adminCommand}
+                            onChange={(e) => setAdminCommand(e.target.value)}
+                            placeholder="Komutu buraya girin... (Örn: SET_AUTONOMOUS_DEPLOYMENT_TRUE...)"
+                            className="flex-grow bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs font-mono text-cyan-300 outline-none focus:border-cyan-500/50"
+                        />
+                        <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 px-6 py-2 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer">UYGULA</button>
+                    </form>
                 </div>
               </div>
 
