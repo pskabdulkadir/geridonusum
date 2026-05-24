@@ -24,13 +24,14 @@ export const blockchainConfig = {
     payoutWallet: process.env.CHANNEL_ROUTING_WALLET || process.env.PAYOUT_WALLET || '0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4',
     commissionWallet: process.env.COMMISSION_WALLET || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', // Aracı firma cüzdanı (Örn: Smart Gate)
     commissionRate: parseFloat(process.env.COMMISSION_RATE || '0.10'), // %10 Komisyon oranı
-    rpcUrl: process.env.RPC_URL || 'https://bsc-dataseed.binance.org/',
+    rpcUrl: process.env.RPC_URL || 'https://polygon-rpc.com', // Varsayılan olarak Polygon Mainnet RPC
     privateKey: process.env.PRIVATE_KEY || process.env.INCOME_DISTRIBUTION_WALLET || '',
     zeroGasActive: false,
     networkMode: process.env.NETWORK_MODE || 'mainnet',
     useAiAnalysis: process.env.USE_AI_ANALYSIS === 'true',
     sharedPoolEnabled: process.env.SHARED_DISTRIBUTION_POOL_ENABLED === 'true',
     batchMining: process.env.BATCH_MINING === 'true',
+    marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.gercek-veri-borsasi.com/v1/list', // Dış pazar yerinin API adresi
 };
 
 export const dbConfig = {

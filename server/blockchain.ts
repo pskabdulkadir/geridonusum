@@ -62,7 +62,7 @@ export class BlockchainRouter {
 
     // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
+      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz. Lütfen .env dosyasını kontrol edin.");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -147,56 +147,56 @@ export class BlockchainRouter {
   }
 
   /**
-   * Gas ücreti ödemeden (Gasless), satış emrini kriptografik olarak imzalar.
+   * PROTOKOL_REAL: EIP-712 Standartlarında yapılandırılmış satış emri imzalar.
+   * Bu imza, alıcı tarafından 'buyAsset' fonksiyonunda kullanılır.
    */
-  public async createSignedSaleOrder(itemId: string, amount: number, price: number): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Satış emri imzalanıyor: ${itemId}...`);
+  public async createSignedSaleOrder(itemId: string, co2SavingsGrams: number, price: number): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Satış emri mühürleniyor: ${itemId}...`);
     
     try {
       const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
       const wallet = new ethers.Wallet(this.privateKey, provider);
+      const network = await provider.getNetwork();
 
-      const message = JSON.stringify({
-        action: "SELL_RECLAMATION_DATA",
+      // Domain Separator (Kontrat ile eşleşmeli)
+      const domain = {
+        name: "InternetReclamationMarket",
+        version: "1",
+        chainId: network.chainId, // Dinamik Zincir Kimliği
+        verifyingContract: this.contractAddress
+      };
+
+      // Veri Yapısı (Types)
+      const types = {
+        AssetSale: [
+          { name: "id", type: "string" },
+          { name: "price", type: "uint256" },
+          { name: "seller", type: "address" }
+        ]
+      };
+
+      // Veri (Value)
+      const value = {
         id: itemId,
-        amount: amount,
-        price: price,
-        timestamp: Date.now()
-      });
+        price: ethers.utils.parseUnits(price.toFixed(18), 18), // Fiyatı Wei'ye çevir
+        seller: wallet.address
+      };
 
-      const signature = await wallet.signMessage(message);
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `İşlem başarıyla imzalandı. Sunucuya iletiliyor.`);
+      const signature = await wallet._signTypedData(domain, types, value);
+      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Dijital mühür başarıyla oluşturuldu.`);
       return signature;
     } catch (err: any) {
-      throw new Error(`İmzalama hatası: ${err.message}`);
+      throw new Error(`EIP-712 imzalama hatası: ${err.message}`);
     }
   }
 
   /**
-   * Gerçek Satış İşlemi: CHANNEL_ROUTING_WALLET adresine gerçek bakiye transferi yapar.
+   * [DEPRECATED] executeRealSale artık Gas-on-Purchase modeli nedeniyle kullanılmamaktadır.
+   * Bu fonksiyon, satıcının doğrudan gas ödediği transferler için tasarlanmıştır.
    */
   public async executeRealSale(amountStr: string): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ geçidi tetiklendi: Gerçek transfer emri hazırlanıyor...`);
-    
-    try {
-      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-      const wallet = new ethers.Wallet(this.privateKey, provider);
-
-      // İşlem öncesi BSC bakiye kontrolü
-      await this.checkGasBalance('bsc');
-
-      const tx = await wallet.sendTransaction({
-        to: blockchainConfig.payoutWallet,
-        value: ethers.utils.parseEther(amountStr),
-        gasLimit: 35000, // Güvenli üretim limiti
-      });
-
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `✓ İşlem gönderildi, Hash: ${tx.hash}`);
-      return tx.hash;
-    } catch (err: any) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', `Satış hatası: ${this.parseBlockchainError(err)}`);
-      throw err;
-    }
+    this.emitLog('BLOCKCHAIN', 'WARNING', `[DEPRECATED] executeRealSale fonksiyonu çağrıldı ancak pasif. Yeni protokol: Gas-on-Purchase.`);
+    throw new Error("DEPRECATED: executeRealSale is no longer used in Gas-on-Purchase model.");
   }
 
   /**

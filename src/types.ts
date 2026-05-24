@@ -27,6 +27,7 @@ export interface ReadyToSellItem {
   timestamp: string;
   signature?: string; // Alıcı için hazırlanan voucher imzası
   sellerAddress?: string; // İmzayı atan yetkili cüzdan
+  valuationWei?: string; // Kontrat için hassas fiyat verisi (BigNumber string olarak)
 }
 
 export interface CoreStats {

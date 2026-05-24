@@ -261,14 +261,10 @@ export default function App() {
       const signer = provider.getSigner();
       
       // Alıcı gas ücretini ödeyerek kontratı tetikler
-      // Bu kısım gerçek kontrat ABI'si ve buyAsset fonksiyonu ile entegre edilir
       console.log("Buyer is executing claim for signature:", item.signature);
       
       // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
-      // ÜRETİM GEREKLİLİĞİ: Kontrat adresini backend konfigürasyonundan al
-      const contractAddress = stats.readyToSell[0]?.sellerAddress === stats.payoutWalletAddress 
-        ? "0x71C7656EC7ab88b098defB751B7401B5f6d8976F" // Mevcut sabit adres
-        : "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"; 
+      const contractAddress = stats.payoutWalletAddress; // Payout wallet aynı zamanda kontrat adresi olarak kullanılabilir veya config'den çekilebilir
 
       const contractAbi = [
         "function buyAsset(string memory id, uint256 price, bytes memory signature) public payable"

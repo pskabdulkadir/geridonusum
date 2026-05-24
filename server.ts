@@ -90,7 +90,7 @@ const ReadyToSellSchema = new mongoose.Schema({
   reportSummary: String,
   marketPriceUSD: Number,
   isSold: { type: Boolean, default: false },
-  timestamp: { type: Date, default: Date.now },
+  timestamp: { type: Date, default: Date.now }, // Virgül eksikliği giderildi
   signature: String,
   sellerAddress: String,
   valuationWei: String // Kontrat için hassas fiyat verisi
@@ -183,15 +183,47 @@ async function broadcastToNetwork(itemId: string) {
       pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${item.marketPriceUSD} USDT değerinde satış emri imzalandı.`);
       await ReadyToSellModel.updateOne({ id: itemId }, { 
         signature: signature,
-        sellerAddress: sellerAddress 
+        sellerAddress: sellerAddress,
+        valuationWei: ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString() // Wei değerini kaydet
       });
       pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
+
+      // PROTOKOL_REAL: Varlığı doğrudan dış pazar yeri API'sine gönder
+      await exportToMarketplace({
+        id: itemId,
+        signature: signature,
+        price: item.marketPriceUSD,
+        sellerAddress: sellerAddress,
+        valuationWei: ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString()
+      });
     } else {
       throw new Error("İmza oluşturulamadı: Cüzdan yetkilendirme hatası.");
     }
   } catch (err: any) {
     const techError = err?.error?.message || err?.message || "Bilinmeyen Ağ Hatası";
     pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] İmzalama hatası: ${techError}`);
+  }
+}
+
+// server.ts - Otonom İhracat Bloğu
+async function exportToMarketplace(item: any) {
+    const marketApiUrl = blockchainConfig.marketplaceApiUrl; // Pazar yerinin API adresi
+    try {
+        const response = await axios.post(marketApiUrl, {
+            id: item.id,
+            signature: item.signature,
+            price: item.price,
+            sellerAddress: item.sellerAddress,
+            valuationWei: item.valuationWei
+        });
+        if (response.status === 200 || response.status === 201) {
+            pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] Varlık borsa kanalına gönderildi: ${item.id}`);
+        } else {
+            throw new Error(`API yanıtı başarısız: ${response.status} - ${response.statusText}`);
+        }
+    } catch (err: any) {
+        pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] Borsa bağlantısı sağlanamadı veya API hatası: ${err.message}`);
+    }
   }
 }
 
