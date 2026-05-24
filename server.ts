@@ -183,28 +183,29 @@ async function broadcastToNetwork(itemId: string) {
   }
 }
 
+/**
+ * EXECUTOR: OTONOM İŞLEM DÖNGÜSÜ
+ * Recursive timeout kullanarak işlemlerin birbirini ezmesini (overlapping) önler.
+ */
 async function startAutomatedTrading() {
-  pushLog('SYSTEM', 'SUCCESS', "EXECUTOR MODU: Otonom geri dönüşüm fabrikası (PRODUCTION) aktif.");
-  
-  setInterval(async () => {
-    if (!serverState.isCrawling) return; // Dashboard üzerinden motor durdurulmuşsa işlem yapma
+  if (!serverState.isCrawling) {
+    setTimeout(startAutomatedTrading, 5000);
+    return;
+  }
 
-    // --- VERİ MADENCİLİĞİ (MINING) VE LİSTENER ---
-    pushLog('MARKET', 'INFO', "Mining: Yeni veri kaynakları ve likidite taranıyor...");
-    
+  try {
     const opportunity = await checkMarketOpportunity();
-    
     if (opportunity.isProfitable && opportunity.item) {
-      // --- DATA_CLEANING_TASK AKTİF ---
-      pushLog('EXECUTOR', 'ANALYZE', `[DATA_CLEANING_TASK] ${opportunity.item.id} geri dönüşüm süreci başlatıldı.`);
-      
-      // Değerleme Algoritması Çalıştırılıyor
-      const valuation = mainOptimizer.calculateDataValue(opportunity.item.co2SavingsGrams, 1024);
-      pushLog('MARKET', 'SUCCESS', `Değerleme Tamamlandı: Paket Değeri $${valuation} USDT`);
-
+      pushLog('EXECUTOR', 'ANALYZE', `[DATA_CLEANING_TASK] ${opportunity.item.id} işleniyor.`);
+      const valuation = mainOptimizer.calculateDataValue(75, 1024); // Varsayılan kalite
       await broadcastToNetwork(opportunity.item.id);
     }
-  }, 10000); // 10 saniyede bir kontrol
+  } catch (err) {
+    console.error("[TRADING_ERROR]", err);
+  }
+
+  // Bir sonraki kontrol için 15 saniye bekle (Rate-Limited)
+  setTimeout(startAutomatedTrading, 15000);
 }
 
 /**

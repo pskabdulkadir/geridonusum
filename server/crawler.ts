@@ -144,69 +144,46 @@ export class WebCrawler {
 
     while (this.isRunning) {
       // PROTOKOL_HIZ_SINIRI: Her döngü başında sunucunun nefes almasını sağla
-      await this.sleep(this.delayMs);
+      await this.sleep(this.delayMs || 5000);
 
-      // Robust empty queue protection - Re-enqueue seeds and reset visited list if exhausted
-      if (this.queue.length === 0) {
-        this.emitLog('CRAWLER', 'INFO', `Tarama kuyruğu temizlendi. Yeni döngü için tohumlar yeniden yükleniyor.`);
-        for (const seed of seeds) {
-          this.visitedUrls.delete(seed);
-          this.enqueue(seed);
-        }
-        // Occasional prune to allow re-visiting pages
-        if (this.visitedUrls.size > 200) {
-          this.visitedUrls.clear();
-        }
-      }
-
-      const url = this.queue.shift();
-      if (!url) {
-        await this.sleep(this.delayMs || 1000);
-        continue;
-      }
-      
-      if (this.visitedUrls.has(url)) {
-        continue;
-      }
-
-      this.visitedUrls.add(url);
-      crawledCount++;
-
-      if (this.onCrawlingStateChange) {
-        this.onCrawlingStateChange(url);
-      }
-
-      const displayLimitText = this.targetLimit > 500000 ? "Sonsuz" : this.targetLimit.toString();
-      this.emitLog('CRAWLER', 'ANALYZE', `Düğüm üzerinde tarama başlatılıyor [${crawledCount}/${displayLimitText}]: ${url}`);
-      
-      const start = Date.now();
-      let html = '';
-      let links: string[] = [];
-      
       try {
-        const result = await this.fetchAndAnalyze(url);
-        html = result.html;
-        links = result.links;
-      } catch (err: any) {
-        this.emitLog('CRAWLER', 'ERROR', `Hata koruması devrede. ${url} atlanıyor: ${err.message}`);
-      }
+        // Robust empty queue protection
+        if (this.queue.length === 0) {
+          this.emitLog('CRAWLER', 'INFO', `Tarama kuyruğu temizlendi. Tohumlar yenileniyor.`);
+          for (const seed of seeds) {
+            this.visitedUrls.delete(seed);
+            this.enqueue(seed);
+          }
+          if (this.visitedUrls.size > 200) this.visitedUrls.clear();
+        }
 
-      const duration = Date.now() - start;
+        const url = this.queue.shift();
+        if (!url || this.visitedUrls.has(url)) continue;
 
-      if (html) {
-        this.emitLog('CRAWLER', 'SUCCESS', `Veri başarıyla yüklendi (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB, Süre: ${duration}ms).`);
+        this.visitedUrls.add(url);
+        crawledCount++;
+
+        if (this.onCrawlingStateChange) this.onCrawlingStateChange(url);
+
+        const displayLimitText = this.targetLimit > 500000 ? "Sonsuz" : this.targetLimit.toString();
+        this.emitLog('CRAWLER', 'ANALYZE', `Düğüm taraması [${crawledCount}/${displayLimitText}]: ${url}`);
         
-        // Push newly excavated link routes
-        for (const link of links) {
-          this.enqueue(link, url);
-        }
+        const start = Date.now();
+        const { html, links } = await this.fetchAndAnalyze(url);
+        const duration = Date.now() - start;
 
-        // Trigger code optimization workflow under strict try-catch safety shield
-        try {
-          await onPageScaredAsync(url, html);
-        } catch (optimizeError: any) {
-          this.emitLog('SYSTEM', 'ERROR', `Optimizasyon motoru hatası (pasa geçiliyor): ${optimizeError.message}`);
+        if (html) {
+          this.emitLog('CRAWLER', 'SUCCESS', `Yüklendi: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KB (${duration}ms)`);
+          for (const link of links) this.enqueue(link, url);
+          
+          // Safe page processing
+          await onPageScaredAsync(url, html).catch(err => {
+            this.emitLog('SYSTEM', 'ERROR', `İşleme hatası (atlandı): ${err.message}`);
+          });
         }
+      } catch (loopError: any) {
+        this.emitLog('SYSTEM', 'ERROR', `Kritik döngü hatası: ${loopError.message}`);
+        await this.sleep(10000); // Hata durumunda 10 saniye bekle
       }
     }
 
