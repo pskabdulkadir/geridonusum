@@ -26,7 +26,7 @@ export class WebCrawler {
   public isRunning: boolean = false;
 
   constructor(options: CrawlerOptions = {}) {
-    this.delayMs = options.delayMs !== undefined ? options.delayMs : 1000;
+    this.delayMs = options.delayMs !== undefined ? options.delayMs : 5000; // Varsayılan 5 saniye gecikme
     this.targetLimit = options.targetLimit || 100;
   }
 
@@ -58,6 +58,12 @@ export class WebCrawler {
         return;
       }
       const cleanUrl = parsedUrl.origin + parsedUrl.pathname + parsedUrl.search;
+      
+      // Bellek Sızıntısı Koruması: Kuyruk boyutunu sınırla
+      if (this.queue.length >= 1000) {
+        return;
+      }
+
       if (!this.visitedUrls.has(cleanUrl) && !this.queue.includes(cleanUrl)) {
         this.queue.push(cleanUrl);
         this.emitLog('CRAWLER', 'INFO', `Tespit edilen alt-düğüm: ${cleanUrl} (Referans: ${referrer})`);

@@ -112,7 +112,7 @@ export default function App() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 5000);
+    const interval = setInterval(fetchStats, 15000); // 15 saniyede bir güncelle
     return () => clearInterval(interval);
   }, []);
 

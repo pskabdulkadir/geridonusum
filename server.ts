@@ -32,7 +32,7 @@ export const mainOptimizer = new DataOptimizer();
 export const mainBlockchain = new BlockchainRouter();
 export const mainMarketplace = new MarketplaceManager();
 export const mainCrawler = new WebCrawler({
-  delayMs: 2000, 
+  delayMs: 5000, // Her istek arasında 5 saniye bekle
   targetLimit: 999999
 });
 
