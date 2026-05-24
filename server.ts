@@ -458,68 +458,33 @@ app.post("/api/payout-config", (req, res) => {
 });
 
 /**
- * Execute a real-time smart contract payout on Binance Smart Chain (BSC)
- * routing actual BNB directly to your configured destination wallet.
+ * PROTOKOL_REAL: Blokzinciri üzerindeki başarılı satın alımı onaylar.
+ * İşlemi alıcı tetiklediği için sunucu sadece kanıtı (txHash) doğrular ve mühürler.
  */
-app.post("/api/execute-payout", async (req, res) => {
-  const { itemId } = req.body;
-  let item: ReadyToSellItem | null = null;
-  if (mongoose.connection.readyState === 1) {
-    item = await ReadyToSellModel.findOne({ id: itemId });
-  } else {
-    return res.status(503).json({ error: "Veritabanı bağlantısı aktif değil. İşlem yapılamadı." });
-  }
-  
-  if (!item) {
-    return res.status(404).json({ error: "Veri paketi bulunamadı." });
-  }
-  
-  if (item.isSold) {
-    return res.status(400).json({ error: "Bu paket zaten satıldı." });
-  }
-  
-  // 1. Mark as sold to lock state immediately
-  if (mongoose.connection.readyState === 1) {
-    await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-  } else {
-    pushLog('SYSTEM', 'WARNING', 'MongoDB bağlantısı aktif değil. Veri paketi güncellenemedi.');
-  }
-  
-  // Set the payout amount in BNB (0.0005 BNB is ~ $0.30 - $0.40, a very safe micro-payment to test live block integration without draining real funds)
-  const bnbAmount = "0.0005"; 
-
-  pushLog('EXECUTOR', 'INFO', `Gelir çekme işlemi başlatıldı. Hedef Cüzdan: ${serverState.payoutWalletAddress} | Tutar: ${bnbAmount} BNB`);
-
-  // Execute BSC transfer via the blockchain router
+app.post("/api/market/confirm-sale", async (req, res) => {
+  const { itemId, txHash } = req.body;
   try {
-    const result = await mainBlockchain.executeRealSale(bnbAmount);
+    const item = await ReadyToSellModel.findOne({ id: itemId });
+    if (!item) return res.status(404).json({ error: "Asset not found" });
 
-    if (result.success && result.txHash) {
-      const record: TransactionRecord = {
-        url: item.url,
-        proofHash: item.proofHash,
-        savedGrams: item.co2SavingsGrams,
-        txHash: result.txHash,
-        timestamp: new Date().toISOString()
-      };
-      if (mongoose.connection.readyState === 1) {
-        await TransactionModel.create(record);
-      }
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[TX_SUCCESS] HASH: ${result.txHash} | TOTAL: ${bnbAmount} BNB | STATUS: SPLIT_COMPLETE`);
-      res.json({ success: true, item, transaction: record });
-    } else if (result.status === 'PENDING') {
-      pushLog('BLOCKCHAIN', 'WARNING', `[PENDING_QUEUE] ${item.id} beklemeye alındı: ${result.error}`);
-      res.status(202).json({ success: false, error: result.error, status: 'PENDING' });
-    } else {
-      throw new Error(result.error);
-    }
-  } catch (err: any) {
-    // Hata durumunda satış durumunu geri al
+    await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
+    
+    const record: TransactionRecord = {
+      url: item.url,
+      proofHash: item.proofHash,
+      savedGrams: item.co2SavingsGrams,
+      txHash: txHash,
+      timestamp: new Date().toISOString()
+    };
+
     if (mongoose.connection.readyState === 1) {
-      await ReadyToSellModel.updateOne({ id: itemId }, { isSold: false });
+      await TransactionModel.create(record);
     }
-    pushLog('BLOCKCHAIN', 'ERROR', `Ödeme hatası: ${err.message}`);
-    res.status(500).json({ error: err.message || "Blockchain payout failed." });
+    
+    pushLog('BLOCKCHAIN', 'SUCCESS', `[ON_CHAIN_SALE] Varlık ${itemId} başarıyla satıldı! Tx: ${txHash}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

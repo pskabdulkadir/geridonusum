@@ -284,6 +284,14 @@ export default function App() {
 
       console.log("[WAITING_CONFIRMATION] İşlem hash:", tx.hash);
       await tx.wait();
+      
+      // Sunucuya satışın on-chain olarak gerçekleştiğini bildir
+      await fetch("/api/market/confirm-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, txHash: tx.hash })
+      });
+
       alert(`TEBRİKLER! Varlık satıldı ve gelir yönlendirildi. Tx: ${tx.hash}`);
       fetchStats();
     } catch (err: any) {
