@@ -31,16 +31,33 @@ export class DataOptimizer {
 
     let optimized = rawHtml;
 
-    // 1. Scrub HTML comments
-    optimized = optimized.replace(/<!--[\s\S]*?-->/g, '');
+    // 1. AGRESİF TEMİZLİK: Reklam Tracker ve Analitik Servislerini Ayıkla
+    const trackerPatterns = [
+      /<script[\s\S]*?googletagmanager\.com[\s\S]*?<\/script>/gi,
+      /<script[\s\S]*?google-analytics\.com[\s\S]*?<\/script>/gi,
+      /<script[\s\S]*?connect\.facebook\.net[\s\S]*?<\/script>/gi,
+      /<script[\s\S]*?fbevents\.js[\s\S]*?<\/script>/gi,
+      /<script[\s\S]*?hotjar\.com[\s\S]*?<\/script>/gi,
+      /<script[\s\S]*?pixel[\s\S]*?<\/script>/gi
+    ];
+    
+    trackerPatterns.forEach(pattern => {
+      optimized = optimized.replace(pattern, '<!-- [RECLAIMED_TRACKER_SPACE] -->');
+    });
 
-    // 2. Scrub inline JS block comments
+    // 2. Takip Piksellerini (1x1 şeffaf görseller) Temizle
+    optimized = optimized.replace(/<img[\s\S]*?width=["']1["'][\s\S]*?height=["']1["'][\s\S]*?>/gi, '<!-- [RECLAIMED_PIXEL] -->');
+
+    // 3. Standart HTML yorumlarını temizle (kendi bıraktığımız mühürler hariç)
+    optimized = optimized.replace(/<!--(?! \[).*?-->/g, '');
+
+    // 4. Inline JS blok yorumlarını temizle
     optimized = optimized.replace(/\/\*[\s\S]*?\*\//g, '');
 
-    // 3. Scrub single line script comments precisely
+    // 5. Satır içi script yorumlarını ayıkla
     optimized = optimized.replace(/(?<!:|https|http)\/\/.*$/gm, '');
 
-    // 4. Compact consecutive structural spacing inside structural code blocks
+    // 6. Gereksiz boşlukları ve satır sonlarını daralt
     optimized = optimized.replace(/[\s\r\n]+/g, ' ');
 
     return optimized.trim();

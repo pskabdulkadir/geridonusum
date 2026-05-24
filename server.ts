@@ -23,11 +23,35 @@ import { DataOptimizer } from "./server/optimizer.ts";
 import { generateEcoReport } from "./server/gemini.ts";
 import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
+import { WebCrawler } from "./server/crawler.ts";
 
 // --- GLOBAL INSTANCES (Tanımlamalar Tek Sefer Yapılmalı) ---
 const app = express();
 const mainOptimizer = new DataOptimizer();
 const mainBlockchain = new BlockchainRouter();
+const mainCrawler = new WebCrawler({
+  delayMs: 2000, 
+  targetLimit: 999999
+});
+
+// 1. HEDEF BELİRLEME (Seed URLs)
+const crawlerSeeds = [
+  "https://wikipedia.org",
+  "https://html.spec.whatwg.org",
+  "https://www.w3.org/Consortium/mission",
+  "https://developer.mozilla.org/en-US/docs/Web/Sustainability"
+];
+
+// 2. ATIK TANIMI & FİLTRELEME KRİTERLERİ
+const isRecyclableWaste = (html: string): boolean => {
+  // ATIK ANALİZİ: Yorum sayısı, Tracker yoğunluğu ve boşluk oranı
+  const commentCount = (html.match(/<!--[\s\S]*?-->/gi) || []).length;
+  const trackerCount = (html.match(/googletagmanager|analytics|facebook|pixel|hotjar/gi) || []).length;
+  const whiteSpaceRatio = (html.split(" ").length / html.length);
+  
+  // Tracker içeren veya gereksiz şişkinliği olan sayfalar "Geri Dönüştürülebilir"dir.
+  return html.length > 5120 || commentCount > 5 || trackerCount > 2 || whiteSpaceRatio > 0.12;
+};
 
 // Global Server State representing the autonomous "Internet Reclamation Core"
 const serverState = {
@@ -185,6 +209,63 @@ async function startAutomatedTrading() {
       await broadcastToNetwork(opportunity.item.id);
     }
   }, 10000); // 10 saniyede bir kontrol
+}
+
+/**
+ * 3. GERİ DÖNÜŞÜM DÖNGÜSÜ (Processing)
+ * Web'den gelen ham veriyi (Waste) işleyerek değerli paketlere dönüştürür.
+ */
+async function runRecyclingMining() {
+  if (!serverState.isCrawling) return;
+
+  mainCrawler.registerLogger((module, level, msg) => pushLog(module, level, msg));
+  mainCrawler.registerStateListener((url) => { serverState.currentCrawlingUrl = url; });
+
+  try {
+    await mainCrawler.start(crawlerSeeds, async (url, html) => {
+      if (!isRecyclableWaste(html)) {
+        pushLog('MARKET', 'INFO', `Düğüm atlandı (Atık kriterlerini karşılamıyor): ${url}`);
+        return;
+      }
+
+      pushLog('EXECUTOR', 'INFO', `Dijital atık tespit edildi, geri dönüşüm başlatılıyor...`);
+      
+      const originalBytes = Buffer.byteLength(html);
+      const optimizedHtml = mainOptimizer.optimizeHtml(html);
+      const optimizedBytes = Buffer.byteLength(optimizedHtml);
+      const metric = mainOptimizer.calculateCarbonSavings(originalBytes, optimizedBytes, 35000);
+      
+      // Sayfadaki tracker sayısına göre ek değer puanı
+      const trackerCount = (html.match(/googletagmanager|analytics|facebook|pixel/gi) || []).length;
+      
+      // Veriyi değerli bir varlığa dönüştür (Structuring)
+      const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
+      const valuation = mainOptimizer.calculateDataValue(metric.co2SavingsGrams + (trackerCount * 0.01), metric.bytesSaved);
+      const proofHash = mainOptimizer.generateProofHash(url, metric.bytesSaved, metric.co2SavingsGrams, optimizedHtml);
+
+      const newItem: ReadyToSellItem = {
+        id: generatedId,
+        url,
+        proofHash,
+        co2SavingsGrams: metric.co2SavingsGrams,
+        extractedKeywords: ["recyclable", "dark-data", "carbon-offset"],
+        reportSummary: `STRÜKTÜREL GERİ DÖNÜŞÜM: ${url} düğümü başarıyla optimize edildi.`,
+        marketPriceUSD: valuation,
+        isSold: false,
+        timestamp: new Date().toISOString()
+      };
+
+      if (mongoose.connection.readyState === 1) {
+        await ReadyToSellModel.create(newItem);
+        serverState.pagesProcessed++;
+        serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
+        serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
+        pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
+      }
+    });
+  } catch (err: any) {
+    pushLog('SYSTEM', 'ERROR', `Geri dönüşüm döngüsünde hata: ${err.message}`);
+  }
 }
 
 mainBlockchain.registerLogger((module, level, msg) => {
@@ -370,6 +451,9 @@ app.post("/api/crawl/start", (req, res) => {
 
   serverState.isCrawling = true;
   pushLog('SYSTEM', 'INFO', 'Otonom Ticaret Motoru: MARKET_LISTENER başlatıldı.');
+
+  // Madencilik ve Geri Dönüşüm çarklarını döndür
+  runRecyclingMining();
 
   res.json({ success: true, message: "Otonom tarama iş parçacıkları başlatıldı." });
 });
