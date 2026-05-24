@@ -578,6 +578,11 @@ app.post("/api/optimize-url", async (req, res) => {
   }
 });
 
+/**
+ * Health Check - Sunucunun hayatta olup olmadığını denetler
+ */
+app.get("/healthz", (req, res) => res.status(200).send("OK"));
+
 /* ==========================================
    Static File Server & Bundled Vite Framework
    ========================================== */
