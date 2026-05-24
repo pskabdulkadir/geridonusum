@@ -62,7 +62,7 @@ export class BlockchainRouter {
 
     // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      this.emitLog('SYSTEM', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
+      console.error("❌ KRITIK: PRIVATE_KEY eksik veya hatalı!");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -71,6 +71,21 @@ export class BlockchainRouter {
 
   public registerLogger(cb: typeof this.logCallback) {
     this.logCallback = cb;
+  }
+
+  /**
+   * Cüzdan adresini döndür (PRIVATE_KEY'den türetilmiş)
+   */
+  public getWalletAddress(): string {
+    if (!this.privateKey || this.privateKey.includes('0xtest')) {
+      return "";
+    }
+    try {
+      const wallet = new ethers.Wallet(this.privateKey);
+      return wallet.address;
+    } catch {
+      return "";
+    }
   }
 
   private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {

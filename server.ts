@@ -318,21 +318,22 @@ app.get("/api/stats", async (req, res) => {
 
 /**
  * Wallet Balance Checker - Canlı Polygon Mainnet Bakiye Sorgusu
+ * GELİR YAPILAN CÜZDAN: blockchainConfig.payoutWallet (satış sonrası para buraya gidecek)
  */
 app.get("/api/wallet-balance", async (req, res) => {
   try {
-    if (!blockchainConfig.privateKey) {
+    // Satış geliri gelen cüzdan adresini kullan (blockchainConfig.payoutWallet)
+    const walletAddress = blockchainConfig.payoutWallet;
+
+    if (!walletAddress || walletAddress === "0x0000000000000000000000000000000000000000") {
       return res.json({
         address: "",
         balanceMATIC: "0",
         balanceUSD: "0",
-        error: "PRIVATE_KEY not configured",
+        error: "Payout wallet not configured",
         timestamp: new Date().toISOString()
       });
     }
-
-    // Wallet address türet (privateKey'den)
-    const walletAddress = mainBlockchain.getWalletAddress?.() || "";
 
     // Polygon RPC'den bakiye al
     const response = await axios.post(blockchainConfig.rpcUrl, {
