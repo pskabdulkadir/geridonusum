@@ -256,7 +256,26 @@ export default function App() {
       // BROWSER-SIDE WALLET (ALICI) ETKİLEŞİMİ
       if (!(window as any).ethereum) throw new Error("MetaMask bulunamadı.");
       
-      const provider = new (window as any).ethers.providers.Web3Provider((window as any).ethereum);
+      const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+      const { chainId } = await provider.getNetwork();
+
+      // GÜVENLİK: Kullanıcının Polygon (137) ağında olduğundan emin ol (0x89)
+      if (chainId !== 137) {
+        try {
+          await (window as any).ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x89' }], // 137 hex
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            alert("Lütfen MetaMask'a Polygon Mainnet ağını ekleyin.");
+          } else {
+            throw new Error("Lütfen cüzdanınızı Polygon ağına geçirin.");
+          }
+          return;
+        }
+      }
+
       await provider.send("eth_requestAccounts", []);
       const signer = provider.getSigner();
       
@@ -264,14 +283,15 @@ export default function App() {
       console.log("Buyer is executing claim for signature:", item.signature);
       
       // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
-      const contractAddress = stats.payoutWalletAddress; // Payout wallet aynı zamanda kontrat adresi olarak kullanılabilir veya config'den çekilebilir
+      const contractAddress = stats.contractAddress; 
 
       const contractAbi = [
-        "function buyAsset(string memory id, uint256 price, bytes memory signature) public payable"
+        "function buyAsset(string memory id, uint256 price, bytes memory signature) public payable",
+        "event AssetSold(string id, address buyer, uint256 price)"
       ];
       
-      const contract = new (window as any).ethers.Contract(contractAddress, contractAbi, signer);
-      const priceWei = (window as any).ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
+      const contract = new ethers.Contract(contractAddress, contractAbi, signer);
+      const priceWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
 
       // Gas-on-Purchase: İşlemi alıcı (MetaMask sahibi) başlatır ve gas'ı öder.
       const tx = await contract.buyAsset(item.id, priceWei, item.signature, {
@@ -281,6 +301,10 @@ export default function App() {
       console.log("[WAITING_CONFIRMATION] İşlem hash:", tx.hash);
       await tx.wait();
       
+      // Başarı sesi çal (Revenue Sound)
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3');
+      audio.play().catch(() => {});
+
       // PROTOKOL_REAL: Sunucuya satışın on-chain olarak gerçekleştiğini bildir
       await fetch("/api/market/confirm-sale", {
         method: "POST",

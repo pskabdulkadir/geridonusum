@@ -181,11 +181,14 @@ async function broadcastToNetwork(itemId: string) {
     const sellerAddress = mainBlockchain.getWalletAddress();
 
     if (signature && sellerAddress) {
-      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${item.marketPriceUSD} USDT değerinde satış emri imzalandı.`);
+      const priceFormatted = item.marketPriceUSD.toFixed(4);
+      const valuationWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString();
+
+      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${priceFormatted} USDT değerinde satış emri imzalandı.`);
       await ReadyToSellModel.updateOne({ id: itemId }, { 
         signature: signature,
         sellerAddress: sellerAddress,
-        valuationWei: ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString() // Wei değerini kaydet
+        valuationWei: valuationWei
       });
       pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
 
@@ -195,7 +198,7 @@ async function broadcastToNetwork(itemId: string) {
         signature: signature,
         price: item.marketPriceUSD,
         sellerAddress: sellerAddress,
-        valuationWei: ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString()
+        valuationWei: valuationWei
       });
     } else {
       throw new Error("İmza oluşturulamadı: Cüzdan yetkilendirme hatası.");
@@ -428,6 +431,7 @@ app.get("/api/stats", async (req, res) => {
       zeroGasModeActive: serverState.zeroGasModeActive,
       autonomousMode: serverState.autonomousMode,
       commitThreshold: serverState.commitThreshold,
+      contractAddress: blockchainConfig.contractAddress,
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);

@@ -46,6 +46,7 @@ export interface CoreStats {
   payoutWalletAddress: string;
   autonomousMode: boolean;
   commitThreshold: number;
+  contractAddress: string;
   // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
 
