@@ -97,6 +97,11 @@ const ReadyToSellSchema = new mongoose.Schema({
   valuationWei: String // Kontrat için hassas fiyat verisi
 });
 
+// PERFORMANS: Sunucunun kilitlenmesini ve 500 hatalarını önlemek için DB indeksleri
+TransactionSchema.index({ timestamp: -1 });
+ReadyToSellSchema.index({ isSold: 1, signature: 1, timestamp: 1 });
+ReadyToSellSchema.index({ id: 1 }, { unique: true });
+
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 const ReadyToSellModel = mongoose.model("ReadyToSell", ReadyToSellSchema);
 
@@ -157,8 +162,12 @@ function pushLog(
 async function checkMarketOpportunity() {
   if (mongoose.connection.readyState !== 1) return { isProfitable: false };
   
-  // Envanterde henüz satılmamış (isSold: false) bir paket ara
-  const item = await ReadyToSellModel.findOne({ isSold: false }).sort({ timestamp: 1 });
+  // PROTOKOL_FIX: Sadece satılmamış VE henüz mühürlenmemiş (signature yok) paketleri işle
+  // Bu satır eco-ymeen4 gibi mühürlenmiş ürünlerin tekrar işlenmesini engeller.
+  const item = await ReadyToSellModel.findOne({ 
+    isSold: false, 
+    signature: { $exists: false } 
+  }).sort({ timestamp: 1 });
   
   return {
     isProfitable: !!item,
@@ -241,7 +250,19 @@ async function broadcastToAllMarkets(item: any) {
                     veri3: new Date().toLocaleString('tr-TR')
                 };
             }
-            await axios.post(channel.url, payload, { timeout: 10000 });
+
+            if (channel.name === "GoogleSheets") {
+                // 3. Adım: Botun "CORS" Engelini Aşmalı (Fetch mode: no-cors)
+                await fetch(channel.url, {
+                    method: 'POST',
+                    mode: 'no-cors', // BU SATIR HAYAT KURTARIR
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                await axios.post(channel.url, payload, { timeout: 10000 });
+            }
+
             pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
         } catch (err: any) {
             pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);

@@ -107,7 +107,12 @@ export default function App() {
         });
       }
     } catch (err) {
-      console.error("Failed to fetch statistics from backend:", err);
+      // Render sunucusu kilitlendiğinde veya yeniden başladığında sessizce bekle
+      if (err instanceof TypeError) {
+        console.debug("[STATS] Connectivity lost. Retrying in next cycle...");
+      } else {
+        console.error("Failed to fetch statistics from backend:", err);
+      }
     }
   };
 
