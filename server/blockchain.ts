@@ -162,69 +162,12 @@ export class BlockchainRouter {
   }
 
   /**
-   * PROTOKOL_4: Aracı Komisyon Cüzdanı Mimarisi (Split Payout)
-   * Net gelir %90 Master Wallet'a, %10 Komisyon Wallet'a ardışık olarak gönderilir.
+   * [DEPRECATED] executeRealSale artık pasifize edilmiştir.
+   * Yeni Protokol: Gas-on-Purchase (Alıcı Ödemeli Satın Alım).
    */
   public async executeRealSale(amountStr: string): Promise<{ success: boolean; txHash?: string; error?: string; status?: 'PENDING' | 'REJECTED' }> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `[SPLIT_PAYOUT] Transfer emri bölüştürülüyor...`);
-    
-    try {
-      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-      const feeData = await provider.getFeeData(); // Güncel gas fiyatını al
-      const wallet = new ethers.Wallet(this.privateKey, provider);
-      
-      // Adres Checksum Doğrulaması
-      const masterWallet = ethers.utils.getAddress(blockchainConfig.payoutWallet);
-      const commissionWallet = ethers.utils.getAddress(blockchainConfig.commissionWallet);
-
-      // Tutar Hesaplama
-      const totalWei = ethers.utils.parseEther(amountStr);
-      const commissionWei = totalWei.mul(Math.floor(blockchainConfig.commissionRate * 100)).div(100);
-      const netWei = totalWei.sub(commissionWei);
-
-      this.emitLog('BLOCKCHAIN', 'INFO', `Bölüştürme Detayları: Toplam: ${amountStr} | Komisyon (%10): ${ethers.utils.formatEther(commissionWei)} | Net (%90): ${ethers.utils.formatEther(netWei)}`);
-
-      // İki işlem için toplam gas maliyetini hesapla
-      const gasLimitPerTx = 45000; // Optimize edilmiş gas limiti
-      const totalGasEstimate = ethers.BigNumber.from(gasLimitPerTx).mul(2).mul(feeData.gasPrice || 5000000000);
-
-      const balance = await provider.getBalance(wallet.address);
-
-      // PROTOKOL_3: Gas ve Likidite Kontrolü
-      if (balance.lt(totalWei.add(totalGasEstimate))) {
-        return { 
-          success: false, 
-          status: 'PENDING', 
-          error: `TX_REJECTED: Yetersiz bakiye (Gerekli: ~${ethers.utils.formatEther(totalWei.add(totalGasEstimate))} BNB)` 
-        };
-      }
-
-      // 1. ADIM: Aracı Cüzdana Komisyon Gönderimi
-      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 1/2: Komisyon transferi başlatılıyor...`);
-      const txCommission = await wallet.sendTransaction({
-        to: commissionWallet,
-        value: commissionWei,
-        gasLimit: gasLimitPerTx,
-        gasPrice: feeData.gasPrice // Güncel gas fiyatını kullan
-      });
-      const receiptComm = await txCommission.wait();
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[STEP_1_OK] Komisyon iletildi. Tx: ${txCommission.hash}`);
-
-      // 2. ADIM: Kalan Bakiyenin Master Wallet'a Gönderimi
-      this.emitLog('BLOCKCHAIN', 'INFO', `Adım 2/2: Net gelir master cüzdana sevk ediliyor...`);
-      const txNet = await wallet.sendTransaction({
-        to: masterWallet,
-        value: netWei,
-        gasLimit: gasLimitPerTx,
-        gasPrice: feeData.gasPrice // Güncel gas fiyatını kullan
-      });
-      this.emitLog('BLOCKCHAIN', 'SUCCESS', `[STEP_2_OK] Net gelir iletildi. Tx: ${txNet.hash}`);
-
-      return { success: true, txHash: txNet.hash };
-    } catch (err: any) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', `[ROLLBACK_TRIGGERED] Payout başarısız: ${this.parseBlockchainError(err)}`);
-      return { success: false, status: 'REJECTED', error: this.parseBlockchainError(err) };
-    }
+    this.emitLog('BLOCKCHAIN', 'INFO', `[PASIF_MOD] Otomatik split payout devre dışı. Alıcı tetiklemesi bekleniyor.`);
+    return { success: false, status: 'PENDING', error: "Manual buyer action required." };
   }
 
   /**

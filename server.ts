@@ -260,11 +260,9 @@ async function runRecyclingMining() {
       if (mongoose.connection.readyState === 1) {
         await ReadyToSellModel.create(newItem);
 
-        // --- PAZAR YERİ LİSTELEME (ON-CHAIN) ---
-        const listingTx = await mainMarketplace.listAssetOnMarket(generatedId, valuation);
-        if (listingTx) {
-          pushLog('BLOCKCHAIN', 'SUCCESS', `[ASSET_LISTED] Varlık blokzinciri pazar yerinde aktif. Tx: ${listingTx}`);
-        }
+        // --- PAZAR YERİ LİSTELEME (OFF-CHAIN / GASLESS) ---
+        const result = await mainMarketplace.prepareAssetForSale(generatedId, valuation);
+        pushLog('MARKET', 'SUCCESS', `[ASSET_READY] Varlık satışa hazırlandı. Durum: ${result.status}`);
 
         serverState.pagesProcessed++;
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
