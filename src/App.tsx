@@ -285,7 +285,7 @@ export default function App() {
       console.log("[WAITING_CONFIRMATION] İşlem hash:", tx.hash);
       await tx.wait();
       
-      // Sunucuya satışın on-chain olarak gerçekleştiğini bildir
+      // PROTOKOL_REAL: Sunucuya satışın on-chain olarak gerçekleştiğini bildir
       await fetch("/api/market/confirm-sale", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -166,7 +166,6 @@ async function checkMarketOpportunity() {
 }
 
 async function broadcastToNetwork(itemId: string) {
-  pushLog('BLOCKCHAIN', 'INFO', `[OFF_CHAIN_SIGNING] ${itemId} için alıcı ödemeli voucher hazırlanıyor...`);
   try {
     const item = await ReadyToSellModel.findOne({ id: itemId });
     if (!item) return;
@@ -181,6 +180,7 @@ async function broadcastToNetwork(itemId: string) {
     const sellerAddress = mainBlockchain.getWalletAddress();
 
     if (signature && sellerAddress) {
+      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${item.marketPriceUSD} USDT değerinde satış emri imzalandı.`);
       await ReadyToSellModel.updateOne({ id: itemId }, { 
         signature: signature,
         sellerAddress: sellerAddress 
