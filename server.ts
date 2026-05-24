@@ -92,6 +92,8 @@ const ReadyToSellSchema = new mongoose.Schema({
   marketPriceUSD: Number,
   isSold: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now }
+  signature: String,
+  sellerAddress: String
 });
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
@@ -164,30 +166,24 @@ async function checkMarketOpportunity() {
 }
 
 async function broadcastToNetwork(itemId: string) {
-  pushLog('BLOCKCHAIN', 'INFO', `[PROTOKOL_ON_CHAIN] ${itemId} nolu varlık için gerçek ödeme emri (Mainnet) iletiliyor...`);
+  pushLog('BLOCKCHAIN', 'INFO', `[OFF_CHAIN_SIGNING] ${itemId} için alıcı ödemeli voucher hazırlanıyor...`);
   try {
-    const bnbAmount = "0.0005"; // Cüzdanına gönderilecek gerçek miktar
-    const result = await mainBlockchain.executeRealSale(bnbAmount);
-    
-    const result = await mainBlockchain.executeRealSale(bnbAmount);
-    
-    if (result.success && result.txHash) {
-      await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[CONFIRMED] Varlık blokzincirinde satıldı. Hash: ${result.txHash}`);
-    } else if (result.status === 'PENDING') {
-      pushLog('BLOCKCHAIN', 'WARNING', `[QUEUED] İşlem beklemede (Bakiye/Onay): ${result.error}`);
-    } else {
-      throw new Error(result.error);
-    }
+    const item = await ReadyToSellModel.findOne({ id: itemId });
+    if (!item) return;
+
+    // Gas ücreti ödemeden (Voucher) imza oluştur
+    const signature = await mainBlockchain.createSignedSaleOrder(itemId, item.co2SavingsGrams, item.marketPriceUSD);
+    const sellerAddress = mainBlockchain.getWalletAddress();
+
+    await ReadyToSellModel.updateOne({ id: itemId }, { 
+      signature: signature,
+      sellerAddress: sellerAddress 
+    });
+
+    pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} satışa sunuldu. Gas ücreti alıcıya devredildi.`);
   } catch (err: any) {
     const techError = err?.error?.message || err?.message || "Bilinmeyen Ağ Hatası";
-    // PROTOKOL_5: Safeguard Modu
-    if (!serverState.autonomousMode) {
-        serverState.isCrawling = false;
-        pushLog('SYSTEM', 'ERROR', `[SAFEGUARD_MODE] [REASON: ${techError}] - İşlemler donduruldu.`);
-    } else {
-        pushLog('BLOCKCHAIN', 'WARNING', `[SAFEGUARD_BYPASS] Otonom mod aktif. Hata atlandı: ${techError}`);
-    }
+    pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] İmzalama hatası: ${techError}`);
   }
 }
 

@@ -26,6 +26,8 @@ export interface ReadyToSellItem {
   marketPriceUSD: number;
   isSold: boolean;
   timestamp: string;
+  signature?: string; // Alıcı için hazırlanan voucher imzası
+  sellerAddress?: string; // İmzayı atan yetkili cüzdan
 }
 
 export interface CoreStats {

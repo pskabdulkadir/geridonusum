@@ -245,23 +245,37 @@ export default function App() {
 
   // Gerçek bir alıcının karbon veri paketini satın almasını tetikle (Manuel Payout)
   const handleExecutePayout = async (itemId: string) => {
+    const item = stats.readyToSell.find(i => i.id === itemId);
+    if (!item || !item.signature) {
+      alert("Varlık imzası (Voucher) bulunamadı. Lütfen otonom motorun imzalamasını bekleyin.");
+      return;
+    }
+
     setPurchaseInProgress(itemId);
     try {
-      const res = await fetch("/api/execute-payout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId })
+      // BROWSER-SIDE WALLET (ALICI) ETKİLEŞİMİ
+      if (!(window as any).ethereum) throw new Error("MetaMask bulunamadı.");
+      
+      const provider = new (window as any).ethers.providers.Web3Provider((window as any).ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = provider.getSigner();
+      
+      // Alıcı gas ücretini ödeyerek kontratı tetikler
+      // Bu kısım gerçek kontrat ABI'si ve buyAsset fonksiyonu ile entegre edilir
+      console.log("Buyer is executing claim for signature:", item.signature);
+      
+      // On-chain işlem simülasyonu (Alıcı gas öder)
+      const tx = await signer.sendTransaction({
+        to: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", // Marketplace Kontratı
+        value: (window as any).ethers.utils.parseEther("0.0005") // Fiyat
       });
-      if (res.ok) {
-        // Trigger quick local stats update
-        const statsRes = await fetch("/api/stats");
-        if (statsRes.ok) {
-          const freshData = await statsRes.json();
-          setStats(freshData);
-        }
-      }
+
+      await tx.wait();
+      alert(`Satın alım başarılı! Tx: ${tx.hash}`);
+      fetchStats();
     } catch (err) {
       console.error("Ödeme tahsilatı başarısız oldu:", err.message);
+      alert("İşlem başarısız: " + err.message);
     } finally {
       setPurchaseInProgress(null);
     }
