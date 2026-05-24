@@ -86,8 +86,8 @@ export class WebCrawler {
         headers,
         timeout: 8000,
         responseType: 'text',
-        maxContentLength: 5242880, // 5MB Sınırı
-        maxBodyLength: 5242880
+        maxContentLength: 10485760, // 10MB Sınırı (WHATWG gibi büyük spekleri desteklemek için)
+        maxBodyLength: 10485760
       });
 
       const html = response.data;

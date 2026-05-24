@@ -154,15 +154,14 @@ export class BlockchainRouter {
     this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Satış emri mühürleniyor: ${itemId}...`);
     
     try {
-      const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-      const wallet = new ethers.Wallet(this.privateKey, provider);
-      const network = await provider.getNetwork();
+      // Cüzdanı provider olmadan başlat (Signing işlemi için bağlantı gerekmez, noNetwork hatasını önler)
+      const wallet = new ethers.Wallet(this.privateKey);
 
       // Domain Separator (Kontrat ile eşleşmeli)
       const domain = {
         name: "InternetReclamationMarket",
         version: "1",
-        chainId: network.chainId, // Dinamik Zincir Kimliği
+        chainId: 137, // Polygon Mainnet (Dinamik sorgu NETWORK_ERROR riskini önlemek için sabitlendi)
         verifyingContract: this.contractAddress
       };
 
