@@ -20,7 +20,7 @@ dotenv.config();
 // Modules
 import { BlockchainRouter } from "./server/blockchain.ts";
 import { DataOptimizer } from "./server/optimizer.ts";
-import { generateEcoReport } from "./server/gemini.ts";
+import { DataAnalyzer } from "./server/analyzer.ts"; // Yeni analiz motoru
 import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 import { WebCrawler } from "./server/crawler.ts";
@@ -167,10 +167,12 @@ async function broadcastToNetwork(itemId: string) {
     
     if (txHash) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
-      pushLog('MARKET', 'SUCCESS', `✅ SATIŞ TAMAMLANDI! Gelir cüzdanınıza sevk edildi. İşlem: ${txHash}`);
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[PROTOKOL_SUCCESS] TX_HASH: ${txHash} | STATUS: CONFIRMED`);
     }
   } catch (err: any) {
-    pushLog('BLOCKCHAIN', 'ERROR', `❌ ÖDEME REDDEDİLDİ: ${err.message}`);
+    // PROTOKOL_5: Safeguard Modu
+    serverState.isCrawling = false;
+    pushLog('SYSTEM', 'ERROR', `[SAFEGUARD_MODE] Kritik hata algılandı: ${err.message}. Tüm ticari işlemler donduruldu.`);
   }
 }
 
@@ -220,14 +222,20 @@ async function runRecyclingMining() {
       const originalBytes = Buffer.byteLength(html);
       const optimizedHtml = mainOptimizer.optimizeHtml(html);
       const optimizedBytes = Buffer.byteLength(optimizedHtml);
+      
+      // PROTOKOL_1: Otonom Matematiksel Analiz
+      const qualityScore = DataAnalyzer.calculateQualityScore(html);
+      
+      if (qualityScore < 70) {
+        pushLog('MARKET', 'WARNING', `[DISCARDED] Düğüm atıldı: Kalite puanı yetersiz (${qualityScore}/100) - Dijital Atık.`);
+        return;
+      }
+
       const metric = mainOptimizer.calculateCarbonSavings(originalBytes, optimizedBytes, 35000);
-      
-      // Sayfadaki tracker sayısına göre ek değer puanı
-      const trackerCount = (html.match(/googletagmanager|analytics|facebook|pixel/gi) || []).length;
-      
+
       // Veriyi değerli bir varlığa dönüştür (Structuring)
       const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
-      const valuation = mainOptimizer.calculateDataValue(metric.co2SavingsGrams + (trackerCount * 0.01), metric.bytesSaved);
+      const valuation = mainOptimizer.calculateDataValue(qualityScore, metric.bytesSaved);
       const proofHash = mainOptimizer.generateProofHash(url, metric.bytesSaved, metric.co2SavingsGrams, optimizedHtml);
 
       const newItem: ReadyToSellItem = {
@@ -322,38 +330,18 @@ app.get("/api/stats", async (req, res) => {
  */
 app.get("/api/wallet-balance", async (req, res) => {
   try {
-    // Satış geliri gelen cüzdan adresini kullan (blockchainConfig.payoutWallet)
-    const walletAddress = blockchainConfig.payoutWallet;
-
-    if (!walletAddress || walletAddress === "0x0000000000000000000000000000000000000000") {
-      return res.json({
-        address: "",
-        balanceMATIC: "0",
-        balanceUSD: "0",
-        error: "Payout wallet not configured",
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Polygon RPC'den bakiye al
-    const response = await axios.post(blockchainConfig.rpcUrl, {
-      jsonrpc: "2.0",
-      method: "eth_getBalance",
-      params: [walletAddress, "latest"],
-      id: 1
-    });
-
-    const balanceHex = response.data.result || "0x0";
-    const balanceWei = BigInt(balanceHex);
-    const balanceMATIC = (Number(balanceWei) / 1e18).toFixed(6);
-    const maticPrice = 0.38; // Yaklaşık MATIC/USD fiyatı
-    const balanceUSD = (parseFloat(balanceMATIC) * maticPrice).toFixed(2);
+    // Singleton BlockchainRouter üzerinden bakiye kontrolü yap (Polygon ağını zorla)
+    const walletAddress = mainBlockchain.getWalletAddress() || blockchainConfig.payoutWallet;
+    const { balance, isLow } = await mainBlockchain.checkGasBalance('polygon');
+    
+    const maticPrice = 0.42; // Güncel yaklaşık fiyat
+    const balanceUSD = (parseFloat(balance) * maticPrice).toFixed(2);
 
     res.json({
       address: walletAddress,
-      balanceMATIC: balanceMATIC,
+      balanceMATIC: parseFloat(balance).toFixed(6),
       balanceUSD: balanceUSD,
-      isLow: parseFloat(balanceMATIC) < 0.01,
+      isLow: isLow,
       timestamp: new Date().toISOString()
     });
   } catch (err: any) {
@@ -514,7 +502,7 @@ app.post("/api/optimize-url", async (req, res) => {
     return res.status(400).json({ error: "Eksik parametre: hedef URL." });
   }
 
-  pushLog('EXECUTOR', 'INFO', `Taktik Madencilik Başlatıldı: ${url}`);
+  pushLog('EXECUTOR', 'INFO', `[PROTOKOL_SWEEP] Taktik Madencilik Başlatıldı: ${url}`);
 
   try {
     // 1. Gerçek Veri Çekme
@@ -525,11 +513,21 @@ app.post("/api/optimize-url", async (req, res) => {
     // 2. Optimizasyon ve Hesaplama
     const optimizedHtml = mainOptimizer.optimizeHtml(html);
     const optimizedBytes = Buffer.byteLength(optimizedHtml);
+    
+    // PROTOKOL_1: Otonom Matematiksel Analiz
+    const qualityScore = DataAnalyzer.calculateQualityScore(html);
+    
+    if (qualityScore < 70) {
+      throw new Error(`KALITE_YETERSIZ: Veri puanı ${qualityScore}. Minimum 70 gereklidir.`);
+    }
+
     const savings = mainOptimizer.calculateCarbonSavings(originalBytes, optimizedBytes, 35000);
     const proofHash = mainOptimizer.generateProofHash(url, savings.bytesSaved, savings.co2SavingsGrams, optimizedHtml);
 
     // 3. Veritabanına Kaydet
     const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
+    const valuation = mainOptimizer.calculateDataValue(qualityScore, savings.bytesSaved);
+
     const newItem: ReadyToSellItem = {
       id: generatedId,
       url,
@@ -537,7 +535,7 @@ app.post("/api/optimize-url", async (req, res) => {
       co2SavingsGrams: savings.co2SavingsGrams,
       extractedKeywords: ["asset", "real-data", "mined"],
       reportSummary: `Doğrulanmış Karbon Varlığı: ${url} üzerinden ${savings.co2SavingsGrams.toFixed(4)}g CO2 tasarrufu mühürlendi.`,
-      marketPriceUSD: parseFloat((5 + Math.random() * 5).toFixed(2)),
+      marketPriceUSD: valuation,
       isSold: false,
       timestamp: new Date().toISOString()
     };
@@ -546,13 +544,7 @@ app.post("/api/optimize-url", async (req, res) => {
       await ReadyToSellModel.create(newItem);
     }
 
-    // 4. AI Raporu
-    let aiReport = "";
-    if (blockchainConfig.useAiAnalysis) {
-      aiReport = await generateEcoReport(url, originalBytes, optimizedBytes, savings.co2SavingsGrams);
-    }
-
-    pushLog('BLOCKCHAIN', 'SUCCESS', `Yeni veri varlığı oluşturuldu: ${generatedId}`);
+    pushLog('EXECUTOR', 'SUCCESS', `[ASSET_CREATED] ID: ${generatedId} | QUALITY: ${qualityScore} | VALUATION: ${valuation} USDT`);
 
     res.json({
       url,
@@ -563,7 +555,6 @@ app.post("/api/optimize-url", async (req, res) => {
       efficiencyGainPct: savings.efficiencyGainPct,
       proofHash,
       id: generatedId,
-      aiReport
     });
 
   } catch (err: any) {

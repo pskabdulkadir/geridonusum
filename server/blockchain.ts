@@ -62,7 +62,7 @@ export class BlockchainRouter {
 
     // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
     if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      console.error("❌ KRITIK: PRIVATE_KEY eksik veya hatalı!");
+      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz.");
       this.isRealMode = false;
     } else {
       this.isRealMode = true;
@@ -118,6 +118,33 @@ export class BlockchainRouter {
     if (message.includes('execution reverted')) return "Akıllı kontrat işlemi reddetti; koşullar sağlanmamış olabilir.";
     if (message.includes('timeout') || message.includes('ETIMEDOUT')) return "İşlem ağ yoğunluğu nedeniyle zaman aşımına uğradı.";
     return "İşlem ağ hatası nedeniyle başarısız oldu, lütfen tekrar deneyin.";
+  }
+
+  /**
+   * Cüzdan bakiyesini kontrol eder ve üretim modu için kritik eşik uyarısı verir.
+   * Bu fonksiyon, ödeme emri öncesinde sistemin gas ücretini karşılayıp karşılayamayacağını denetler.
+   */
+  public async checkGasBalance(network: 'polygon' | 'bsc' = 'bsc'): Promise<{ balance: string, isLow: boolean }> {
+    try {
+      // Ağ tipine göre uygun RPC terminalini seç (BSC veya Polygon)
+      const rpc = network === 'bsc' ? 'https://bsc-dataseed.binance.org/' : (this.rpcUrl || 'https://polygon-rpc.com');
+      const provider = new ethers.providers.JsonRpcProvider(rpc);
+      const wallet = new ethers.Wallet(this.privateKey, provider);
+      
+      const balance = await provider.getBalance(wallet.address);
+      const balanceInEther = ethers.utils.formatEther(balance);
+      
+      const threshold = network === 'bsc' ? this.gasThresholds.bsc : this.gasThresholds.polygon;
+      const isLow = parseFloat(balanceInEther) < parseFloat(threshold);
+
+      if (isLow) {
+        this.emitLog('BLOCKCHAIN', 'WARNING', `DİKKAT: On-chain bakiye düşük (${balanceInEther} ${network === 'bsc' ? 'BNB' : 'POL'}).`);
+      }
+      return { balance: balanceInEther, isLow };
+    } catch (err) {
+      // PROTOKOL_3: Mock değerler yasaklandı.
+      throw new Error("BLOCKCHAIN_ACCESS_DENIED: On-chain bakiye sorgulanamadı.");
+    }
   }
 
   /**

@@ -51,7 +51,7 @@ export default function App() {
     currentCrawlingUrl: "",
     readyToSell: [],
     payoutWalletAddress: "", // Will be fetched from /api/stats
-  });
+  }); // zeroGasModeActive kaldırıldı
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logSearch, setLogSearch] = useState<string>("");
@@ -64,8 +64,7 @@ export default function App() {
   const [walletInput, setWalletInput] = useState<string>("");
   const [isUpdatingWallet, setIsUpdatingWallet] = useState<boolean>(false);
   const [walletSaveSuccess, setWalletSaveSuccess] = useState<boolean>(false);
-  const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null);
-  const [autoSalesActive, setAutoSalesActive] = useState<boolean>(true);
+  const [purchaseInProgress, setPurchaseInProgress] = useState<string | null>(null); // Sadece manuel tetikleme için
 
   // Wallet Balance State
   const [walletBalance, setWalletBalance] = useState<{
@@ -78,25 +77,7 @@ export default function App() {
   } | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
 
-  const totalEarnings = stats.totalEarnings || 0;
-
-  // Automatically process unsold inventory items when Auto-sales mode is enabled
-  useEffect(() => {
-    if (!autoSalesActive) return;
-
-    const triggerAutoPurchase = async () => {
-      // Do nothing if there's already an active transaction in progress
-      if (purchaseInProgress !== null) return;
-      
-      const nextUnsold = stats.readyToSell?.find(item => !item.isSold);
-      if (nextUnsold) {
-        await handleSimulatePurchase(nextUnsold.id);
-      }
-    };
-
-    const intervalId = setInterval(triggerAutoPurchase, 2000);
-    return () => clearInterval(intervalId);
-  }, [autoSalesActive, stats.readyToSell, purchaseInProgress]);
+  const totalEarnings = stats.totalEarnings || 0; // Toplam kazanç
 
   // Sync state values to form inputs
   useEffect(() => {
@@ -236,19 +217,17 @@ export default function App() {
   };
 
   // Save payout cüzdan and gas mode settings
-  const handleSavePayoutSettings = async (e: React.FormEvent, customZeroGas?: boolean) => {
+  const handleSavePayoutSettings = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsUpdatingWallet(true);
     setWalletSaveSuccess(false);
     
     try {
-      const activeZeroGas = typeof customZeroGas === "boolean" ? customZeroGas : stats.zeroGasModeActive;
       const res = await fetch("/api/payout-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           payoutWalletAddress: walletInput,
-          zeroGasModeActive: activeZeroGas
         })
       });
       if (res.ok) {
@@ -262,8 +241,8 @@ export default function App() {
     }
   };
 
-  // Simulate a buyer purchasing a clean carbon data package
-  const handleSimulatePurchase = async (itemId: string) => {
+  // Gerçek bir alıcının karbon veri paketini satın almasını tetikle (Manuel Payout)
+  const handleExecutePayout = async (itemId: string) => {
     setPurchaseInProgress(itemId);
     try {
       const res = await fetch("/api/execute-payout", {
@@ -280,7 +259,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Simulated purchase action failed:", err);
+      console.error("Ödeme tahsilatı başarısız oldu:", err);
     } finally {
       setPurchaseInProgress(null);
     }
@@ -1140,7 +1119,7 @@ export default function App() {
                     <div className="bg-slate-950/80 border border-slate-800/80 p-3.5 rounded-xl mb-4.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs transition-all">
                       <div className="flex items-start gap-2.5">
                         <span className="relative flex h-2 w-2 mt-1">
-                          {autoSalesActive ? (
+                        {stats.isCrawling ? ( // isCrawling artık otonom motorun durumunu gösterir
                             <>
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1151,22 +1130,21 @@ export default function App() {
                         </span>
                         <div>
                           <span className="text-slate-300 font-mono font-bold tracking-wide uppercase block text-[10px]">
-                            {autoSalesActive ? "OTONOM GELİR TOPLAMA SİSTEMİ: AKTİF (OTOMATİK)" : "OTONOM GELİR TOPLAMA SİSTEMİ: PASİF (MANUEL)"}
+                          {stats.isCrawling ? "OTONOM GELİR TOPLAMA SİSTEMİ: AKTİF (OTOMATİK)" : "OTONOM GELİR TOPLAMA SİSTEMİ: PASİF (MANUEL)"}
                           </span>
                           <span className="text-[9px] text-slate-500 font-mono block leading-relaxed max-w-[420px]">
-                            {autoSalesActive ? "Sistem her yeni veride otomatik ödeme emri oluşturur ve geliri cüzdanınıza sevk eder." : "Geliri çekmek için sağdaki 'AKILLI KONTRAT ÖDEMESİNİ AL' düğmesini kullanmalısınız."}
+                          {stats.isCrawling ? "Sistem her yeni veride otomatik ödeme emri oluşturur ve geliri cüzdanınıza sevk eder." : "Geliri çekmek için sağdaki 'ÖDEMEYİ TAHSİL ET' düğmesini kullanmalısınız."}
                           </span>
                         </div>
                       </div>
                       <button
-                        onClick={() => setAutoSalesActive(!autoSalesActive)}
-                        className={`font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all pointer shrink-0 ${
-                          autoSalesActive 
-                            ? "bg-emerald-950/45 hover:bg-emerald-900/60 border-emerald-500/30 text-emerald-400" 
-                            : "bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400"
-                        }`}
+                      onClick={stats.isCrawling ? stopCrawlBot : startCrawlBot} // Motoru başlat/durdur
+                      className={`font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all pointer shrink-0 ${stats.isCrawling 
+                        ? "bg-red-950/45 hover:bg-red-900/60 border-red-500/30 text-red-400" 
+                        : "bg-emerald-950/45 hover:bg-emerald-900/60 border-emerald-500/30 text-emerald-400"
+                      }`}
                       >
-                        {autoSalesActive ? "SÜRECİ MANUELE AL" : "TAM OTOMATİĞE AL"}
+                      {stats.isCrawling ? "OTONOM MOTORU DURDUR" : "OTONOM MOTORU BAŞLAT"}
                       </button>
                     </div>
 
@@ -1202,7 +1180,7 @@ export default function App() {
                                   <span className="bg-slate-800 text-slate-400 border border-slate-700 rounded px-2 py-0.5 text-[10px] uppercase">✓ GELİR YÖNLENDİRİLDİ</span>
                                 ) : (
                                   <button
-                                    onClick={() => handleSimulatePurchase(item.id)}
+                                    onClick={() => handleExecutePayout(item.id)}
                                     disabled={purchaseInProgress !== null}
                                     className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition-all cursor-pointer disabled:opacity-50"
                                   >

@@ -85,16 +85,17 @@ export class DataOptimizer {
   }
 
   /**
-   * Veritabanına eklenen verinin ticari değerini hesaplar.
-   * Puanlama: CO2 Tasarrufu (Ağırlık: %70) + Temizlenen Veri Hacmi (Ağırlık: %30)
+   * PROTOKOL_2: Dinamik ve Gerçek Zamanlı Piyasa Değerlemesi
+   * Formula: (Quality Score * Data Size * Market Multiplier)
    */
-  public calculateDataValue(co2Saved: number, bytesSaved: number): number {
-    const co2BasePrice = 12.5; // gram başına taban fiyat (Örn: $12.5)
-    const byteBasePrice = 0.00005; // byte başına taban fiyat
+  public calculateDataValue(qualityScore: number, bytesSaved: number): number {
+    const marketMultiplier = 0.00045; // Güncel Piyasa Çarpanı (USDT per KB/Quality)
     
-    const value = (co2Saved * co2BasePrice) + (bytesSaved * byteBasePrice);
-    // Minimum 1.00 USDT, Maksimum $25.00 bandında normalize et
-    return parseFloat(Math.min(25, Math.max(1, value)).toFixed(2));
+    const dataVolumeKb = bytesSaved / 1024;
+    const valuation = (qualityScore / 100) * dataVolumeKb * marketMultiplier;
+
+    // Matematiksel kesinlik: Hiçbir limit (Math.min) uygulanmaz.
+    return parseFloat(valuation.toFixed(4));
   }
 
   /**
