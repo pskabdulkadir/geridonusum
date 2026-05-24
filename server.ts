@@ -204,8 +204,8 @@ async function startAutomatedTrading() {
     console.error("[TRADING_ERROR]", err);
   }
 
-  // Bir sonraki kontrol için 15 saniye bekle (Rate-Limited)
-  setTimeout(startAutomatedTrading, 15000);
+  // Pasif Modda (Gas-on-Purchase) kontrol aralığını 60 saniyeye çıkararak yükü azalt
+  setTimeout(startAutomatedTrading, 60000);
 }
 
 /**
@@ -348,7 +348,12 @@ app.get("/api/stats", async (req, res) => {
 app.get("/api/wallet-balance", async (req, res) => {
   try {
     // Singleton BlockchainRouter üzerinden bakiye kontrolü yap (Polygon ağını zorla)
-    const walletAddress = mainBlockchain.getWalletAddress() || blockchainConfig.payoutWallet;
+    let walletAddress: string | null = null;
+    if (typeof mainBlockchain.getWalletAddress === 'function') {
+      walletAddress = mainBlockchain.getWalletAddress();
+    }
+    walletAddress = walletAddress || blockchainConfig.payoutWallet;
+
     const { balance, isLow } = await mainBlockchain.checkGasBalance('polygon');
     
     const maticPrice = 0.42; // Güncel yaklaşık fiyat

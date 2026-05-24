@@ -132,6 +132,19 @@ export class BlockchainRouter {
   }
 
   /**
+   * PRIVATE_KEY üzerinden cüzdan adresini hesaplar ve döndürür.
+   */
+  public getWalletAddress(): string | null {
+    try {
+      if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) return null;
+      const wallet = new ethers.Wallet(this.privateKey);
+      return wallet.address;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Cüzdan bakiyesini kontrol eder ve üretim modu için kritik eşik uyarısı verir.
    */
   public async checkGasBalance(network: 'polygon' | 'bsc' = 'bsc'): Promise<{ balance: string, isLow: boolean }> {
