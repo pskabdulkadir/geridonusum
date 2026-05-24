@@ -177,8 +177,6 @@ async function broadcastToNetwork(itemId: string) {
       // veya gerçek kontrat event'ini bekleyebiliriz.
     }
 
-    const result = await mainBlockchain.executeRealSale(bnbAmount);
-    
     if (result.success && result.txHash) {
       await ReadyToSellModel.updateOne({ id: itemId }, { isSold: true });
       pushLog('BLOCKCHAIN', 'SUCCESS', `[TX_SUCCESS] HASH: ${result.txHash} | STATUS: SPLIT_COMPLETE`);
