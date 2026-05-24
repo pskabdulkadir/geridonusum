@@ -112,7 +112,7 @@ export default function App() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 2000);
+    const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, []);
 

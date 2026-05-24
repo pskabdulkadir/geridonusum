@@ -178,7 +178,6 @@ export class WebCrawler {
         links = result.links;
       } catch (err: any) {
         this.emitLog('CRAWLER', 'ERROR', `Hata koruması devrede. ${url} atlanıyor: ${err.message}`);
-        continue;
       }
 
       const duration = Date.now() - start;
