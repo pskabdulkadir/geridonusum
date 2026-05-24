@@ -311,9 +311,9 @@ export default function App() {
         {/* Dynamic State Banner */}
         <div className="mt-4 md:mt-0 flex items-center gap-3 bg-slate-950/60 px-4 py-3 rounded-xl border border-slate-800">
           <div className="flex flex-col items-end">
-            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Bot Aktivite Modülü</span>
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Geri Dönüşüm Fabrikası</span>
             <span className="text-xs font-mono font-medium text-slate-300">
-              {stats.isCrawling ? "HEDEF SEKTÖRLER TARANIYOR..." : "SİSTEM COOLDOWN / HAZIR"}
+              {stats.isCrawling ? "DATA_CLEANING_TASK YÜRÜTÜLÜYOR..." : "FABRİKA STANDBY / HAZIR"}
             </span>
           </div>
           <div className="relative flex h-3 w-3">

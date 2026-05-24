@@ -15,14 +15,7 @@ if (envResult.error) {
 console.log("DEBUG: PRIVATE_KEY kontrolü:", process.env.PRIVATE_KEY ? "YÜKLÜ" : "BOŞ!");
 console.log("DEBUG: MONGO_URI kontrolü:", process.env.MONGO_URI ? "YÜKLÜ" : "BOŞ (varsayılan kullanılacak)");
 
-// MongoDB +srv sorunu için fix
-let mongoUri = process.env.MONGO_URI || 'mongodb+srv://Abdulkadir1983:Abdulkadir1983@cluster0.ukjckex.mongodb.net/geridonüşüm?retryWrites=true&w=majority&appName=Cluster0';
-if (mongoUri.includes('+srv')) {
-  // +srv DNS sorunu varsa, standart bağlantı stringine dönüştür
-  const standardUri = mongoUri.replace('+srv', '').replace('cluster0.ukjckex.mongodb.net', 'cluster0-shard-00-00.ukjckex.mongodb.net:27017');
-  console.log("ℹ️  MongoDB +srv DNS problemi tespit edildi. Standard bağlantı stringine geçiliyor...");
-  mongoUri = standardUri;
-}
+const mongoUri = process.env.MONGO_URI || 'mongodb+srv://Abdulkadir1983:Abdulkadir1983@cluster0.ukjckex.mongodb.net/geridonüşüm?retryWrites=true&w=majority&appName=Cluster0';
 
 export const blockchainConfig = {
     geminiApiKey: process.env.GEMINI_API_KEY || '',

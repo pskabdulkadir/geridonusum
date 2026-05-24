@@ -68,6 +68,19 @@ export class DataOptimizer {
   }
 
   /**
+   * Veritabanına eklenen verinin ticari değerini hesaplar.
+   * Puanlama: CO2 Tasarrufu (Ağırlık: %70) + Temizlenen Veri Hacmi (Ağırlık: %30)
+   */
+  public calculateDataValue(co2Saved: number, bytesSaved: number): number {
+    const co2BasePrice = 12.5; // gram başına taban fiyat (Örn: $12.5)
+    const byteBasePrice = 0.00005; // byte başına taban fiyat
+    
+    const value = (co2Saved * co2BasePrice) + (bytesSaved * byteBasePrice);
+    // Minimum 1.00 USDT, Maksimum $25.00 bandında normalize et
+    return parseFloat(Math.min(25, Math.max(1, value)).toFixed(2));
+  }
+
+  /**
    * Mint SHA-256 integrity seal representing the irreversible audit proof of carbon mitigation
    */
   public generateProofHash(targetUrl: string, bytesSaved: number, co2Saved: number, optimizedCode: string): string {

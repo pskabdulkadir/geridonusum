@@ -79,19 +79,12 @@ process.on('uncaughtException', (err: Error) => {
 });
 
 // CRITICAL CONFIG VALIDATION
-console.log("🔍 Konfigürasyon kontrol başlıyor...");
-
-if (!blockchainConfig.privateKey) {
-  console.error("❌ KRİTİK HATA: .env dosyasındaki PRIVATE_KEY okunmadı!");
-  console.error("   Lütfen .env dosyasına PRIVATE_KEY değişkenini ekleyin.");
-  // Simülasyon moduna geç ama uyarı ver
-  console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Autonomous Simulation Mode.");
-}
-
 if (!blockchainConfig.contractAddress || blockchainConfig.contractAddress.includes('0x00000000')) {
   console.warn("⚠️  WARNING: SMART_GATE_CONTRACT_ADDRESS is not properly configured in .env!");
 }
-
+if (!blockchainConfig.privateKey) {
+  console.warn("⚠️  WARNING: INCOME_DISTRIBUTION_WALLET (Private Key) is missing. System will run in Autonomous Simulation Mode.");
+}
 if (!dbConfig.uri) {
   console.warn("⚠️  WARNING: MONGO_URI is not configured. Database persistence may be disabled.");
 }
@@ -140,8 +133,9 @@ function pushLog(
 }
 
 /**
- * 2. ADIM: OTONOM İŞLEM MOTORU (EXECUTOR)
- * Piyasa fırsatlarını (hazır verileri) denetler ve kârlı işlemleri otomatik imzalar.
+ * EXECUTOR: DİJİTAL GERİ DÖNÜŞÜM MOTORU
+ * Görev Tipi: DATA_CLEANING_TASK
+ * Mining: Piyasa fırsatlarını ve yeni veri kaynaklarını otonom tarar.
  */
 async function checkMarketOpportunity() {
   if (mongoose.connection.readyState !== 1) return { isProfitable: false };
@@ -175,10 +169,19 @@ async function startAutomatedTrading() {
   setInterval(async () => {
     if (!serverState.isCrawling) return; // Dashboard üzerinden motor durdurulmuşsa işlem yapma
 
+    // --- VERİ MADENCİLİĞİ (MINING) VE LİSTENER ---
+    pushLog('MARKET', 'INFO', "Mining: Yeni veri kaynakları ve likidite taranıyor...");
+    
     const opportunity = await checkMarketOpportunity();
     
     if (opportunity.isProfitable && opportunity.item) {
-      pushLog('MARKET', 'ANALYZE', `Kârlı Varlık Tespit Edildi: ${opportunity.item.id}. İşlem başlatılıyor...`);
+      // --- DATA_CLEANING_TASK AKTİF ---
+      pushLog('EXECUTOR', 'ANALYZE', `[DATA_CLEANING_TASK] ${opportunity.item.id} geri dönüşüm süreci başlatıldı.`);
+      
+      // Değerleme Algoritması Çalıştırılıyor
+      const valuation = mainOptimizer.calculateDataValue(opportunity.item.co2SavingsGrams, 1024);
+      pushLog('MARKET', 'SUCCESS', `Değerleme Tamamlandı: Paket Değeri $${valuation} USDT`);
+
       await broadcastToNetwork(opportunity.item.id);
     }
   }, 10000); // 10 saniyede bir kontrol
@@ -462,24 +465,18 @@ async function startServer() {
   try {
     const uri = dbConfig.uri;
     if (!uri) throw new Error("MONGO_URI konfigürasyonda tanımlanmamış!");
-
-    await mongoose.connect(uri, {
-      dbName: dbConfig.dbName,
-      connectTimeoutMS: 5000,
-      serverSelectionTimeoutMS: 5000
-    });
-    console.log(`✅ Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
+    
+    await mongoose.connect(uri, { dbName: dbConfig.dbName });
     pushLog('SYSTEM', 'SUCCESS', `Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
-
-    // Veritabanı bağlantısı başarılı olduğunda motoru başlat
-    startAutomatedTrading();
   } catch (error: any) {
+    pushLog('SYSTEM', 'ERROR', `Kritik Bağlantı Hatası: ${error.message}`);
     console.error("[CRITICAL] MongoDB connection failed:", error.message);
-    console.error("❌ KRİTİK HATA: Veritabanı bağlantısı başarısız. Sistem durduruluyor!");
-    console.error("📌 Çözüm: MongoDB Atlas IP whitelist'ini kontrol edin: https://www.mongodb.com/docs/atlas/security-whitelist/");
-    // Simülasyona düşme YAPMA - sistem durmalı
-    process.exit(1);
+    // Üretim ortamında veritabanı olmadan sistemin çalışmasını engelliyoruz.
+    process.exit(1); 
   }
+
+  // Veritabanı bağlantısı kurulduktan sonra motoru tek bir noktadan başlat
+  startAutomatedTrading();
 
   try {
     if (process.env.NODE_ENV !== "production") {
@@ -520,7 +517,16 @@ async function startServer() {
   // 5-minute autonomous Keep-alive Heartbeat loop
   setInterval(() => {
     const timeString = new Date().toLocaleTimeString();
-    pushLog('SYSTEM', 'INFO', `[KEEP_ALIVE] ${timeString} - Otonom 'keep-alive' sinyali başarıyla iletildi. READY_TO_SELL envanteri izleniyor...`);
+    
+    // [CRAWLER_REPORT] Akışını kalp atışına dahil et
+    const report = {
+      nodes: serverState.pagesProcessed,
+      reclaimed: `${serverState.totalKiloBytesSaved.toFixed(2)} KB`,
+      offset: `${serverState.totalCo2SavedGrams.toFixed(4)} g`
+    };
+
+    pushLog('SYSTEM', 'INFO', `[KEEP_ALIVE] ${timeString} - Heartbeat OK.`);
+    pushLog('MARKET', 'INFO', `[CRAWLER_REPORT] Aktif Düğüm: ${report.nodes} | Geri Kazanım: ${report.reclaimed} | Karbon Offset: ${report.offset}`);
   }, 5 * 60 * 1000); // 5 minutes (300,000 ms)
 }
 
