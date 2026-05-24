@@ -32,6 +32,9 @@ export const blockchainConfig = {
     sharedPoolEnabled: process.env.SHARED_DISTRIBUTION_POOL_ENABLED === 'true',
     batchMining: process.env.BATCH_MINING === 'true',
     marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.gercek-veri-borsasi.com/v1/list', // Dış pazar yerinin API adresi
+    oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/publish',
+    middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
+    openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create'
 };
 
 export const dbConfig = {

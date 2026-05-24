@@ -91,7 +91,7 @@ const ReadyToSellSchema = new mongoose.Schema({
   reportSummary: String,
   marketPriceUSD: Number,
   isSold: { type: Boolean, default: false },
-  timestamp: { type: Date, default: Date.now }, // Virgül eksikliği giderildi
+  timestamp: { type: Date, default: Date.now },
   signature: String,
   sellerAddress: String,
   valuationWei: String // Kontrat için hassas fiyat verisi
@@ -181,10 +181,10 @@ async function broadcastToNetwork(itemId: string) {
     const sellerAddress = mainBlockchain.getWalletAddress();
 
     if (signature && sellerAddress) {
-      const priceFormatted = item.marketPriceUSD.toFixed(4);
       const valuationWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString();
+      const priceFormatted = item.marketPriceUSD.toFixed(4);
 
-      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${priceFormatted} USDT değerinde satış emri imzalandı.`);
+      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${priceFormatted} USDT mühürlendi.`);
       await ReadyToSellModel.updateOne({ id: itemId }, { 
         signature: signature,
         sellerAddress: sellerAddress,
@@ -192,8 +192,8 @@ async function broadcastToNetwork(itemId: string) {
       });
       pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
 
-      // PROTOKOL_REAL: Varlığı doğrudan dış pazar yeri API'sine gönder
-      await exportToMarketplace({
+      // PROTOKOL_EXPORT: Varlığı tüm pazar yeri kanallarına aynı anda ihraç et
+      await broadcastToAllMarkets({
         id: itemId,
         signature: signature,
         price: item.marketPriceUSD,
@@ -201,33 +201,34 @@ async function broadcastToNetwork(itemId: string) {
         valuationWei: valuationWei
       });
     } else {
-      throw new Error("İmza oluşturulamadı: Cüzdan yetkilendirme hatası.");
+      throw new Error("Cüzdan yetkilendirme hatası.");
     }
   } catch (err: any) {
-    const techError = err?.error?.message || err?.message || "Bilinmeyen Ağ Hatası";
-    pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] İmzalama hatası: ${techError}`);
+    pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] ${err.message}`);
   }
 }
 
-// server.ts - Otonom İhracat Bloğu
-async function exportToMarketplace(item: any) {
-    const marketApiUrl = blockchainConfig.marketplaceApiUrl; // Pazar yerinin API adresi
-    try {
-        const response = await axios.post(marketApiUrl, {
-            id: item.id,
-            signature: item.signature,
-            price: item.price,
-            sellerAddress: item.sellerAddress,
-            valuationWei: item.valuationWei
-        });
-        if (response.status === 200 || response.status === 201) {
-            pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] Varlık borsa kanalına gönderildi: ${item.id}`);
-        } else {
-            throw new Error(`API yanıtı başarısız: ${response.status} - ${response.statusText}`);
+/**
+ * PROTOKOL: Çok Kanallı İhracat Motoru
+ * Promise.allSettled kullanarak tüm piyasalara paralel yayın yapar.
+ */
+async function broadcastToAllMarkets(item: any) {
+    const channels = [
+        { name: "OceanProtocol", url: blockchainConfig.oceanProtocolUrl },
+        { name: "CustomMarket", url: blockchainConfig.marketplaceApiUrl },
+        { name: "Middleware (Make.com)", url: blockchainConfig.middlewareWebhookUrl }
+    ].filter(c => c.url && !c.url.includes('your-webhook-id') && !c.url.includes('api.gercek-veri-borsasi.com'));
+
+    const broadcastPromises = channels.map(async (channel) => {
+        try {
+            await axios.post(channel.url, item, { timeout: 8000 });
+            pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
+        } catch (err: any) {
+            pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);
         }
-    } catch (err: any) {
-        pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] Borsa bağlantısı sağlanamadı veya API hatası: ${err.message}`);
-    }
+    });
+
+    await Promise.allSettled(broadcastPromises);
 }
 
 /**

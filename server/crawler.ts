@@ -66,7 +66,8 @@ export class WebCrawler {
 
       if (!this.visitedUrls.has(cleanUrl) && !this.queue.includes(cleanUrl)) {
         this.queue.push(cleanUrl);
-        this.emitLog('CRAWLER', 'INFO', `Tespit edilen alt-düğüm: ${cleanUrl} (Referans: ${referrer})`);
+        // Performans Koruması: Alt düğümleri sadece konsola yaz, SSE kanalını boğma
+        console.log(`[CRAWLER_DISCOVERY] Found: ${cleanUrl}`);
       }
     } catch (e) {
       // ignore parsing abnormalities

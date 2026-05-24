@@ -256,10 +256,10 @@ export default function App() {
       // BROWSER-SIDE WALLET (ALICI) ETKİLEŞİMİ
       if (!(window as any).ethereum) throw new Error("MetaMask bulunamadı.");
       
-      const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+      const provider = new (window as any).ethers.providers.Web3Provider((window as any).ethereum);
       const { chainId } = await provider.getNetwork();
 
-      // GÜVENLİK: Kullanıcının Polygon (137) ağında olduğundan emin ol (0x89)
+      // GÜVENLİK: Kullanıcının Polygon (137) ağında olduğundan emin ol
       if (chainId !== 137) {
         try {
           await (window as any).ethereum.request({
@@ -301,10 +301,6 @@ export default function App() {
       console.log("[WAITING_CONFIRMATION] İşlem hash:", tx.hash);
       await tx.wait();
       
-      // Başarı sesi çal (Revenue Sound)
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3');
-      audio.play().catch(() => {});
-
       // PROTOKOL_REAL: Sunucuya satışın on-chain olarak gerçekleştiğini bildir
       await fetch("/api/market/confirm-sale", {
         method: "POST",
