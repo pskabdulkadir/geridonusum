@@ -305,6 +305,7 @@ async function runRecyclingMining() {
       // Veriyi değerli bir varlığa dönüştür (Structuring)
       const generatedId = "eco-" + Math.random().toString(36).substring(2, 8);
       const valuation = mainOptimizer.calculateDataValue(qualityScore, metric.bytesSaved);
+      const valuationWei = ethers.utils.parseUnits(valuation.toFixed(18), 18).toString();
       const proofHash = mainOptimizer.generateProofHash(url, metric.bytesSaved, metric.co2SavingsGrams, optimizedHtml);
 
       const newItem: ReadyToSellItem = {
@@ -316,7 +317,8 @@ async function runRecyclingMining() {
         reportSummary: `STRÜKTÜREL GERİ DÖNÜŞÜM: ${url} düğümü başarıyla optimize edildi.`,
         marketPriceUSD: valuation,
         isSold: false,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        valuationWei: valuationWei
       };
 
       if (mongoose.connection.readyState === 1) {

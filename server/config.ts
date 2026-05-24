@@ -7,7 +7,7 @@ import * as dotenv from "dotenv";
 
 // .env dosyasını açıkça yükle
 const envResult = dotenv.config();
-if (envResult.error) {
+if (envResult.error && !process.env.PRIVATE_KEY) {
   console.warn("⚠️  .env dosyası bulunamadı, varsayılan değerler kullanılıyor.");
 }
 
