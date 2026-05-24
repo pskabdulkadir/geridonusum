@@ -216,17 +216,32 @@ async function broadcastToAllMarkets(item: any) {
     const channels = [
         { name: "OceanProtocol", url: blockchainConfig.oceanProtocolUrl },
         { name: "CustomMarket", url: blockchainConfig.marketplaceApiUrl },
-        { name: "Middleware (Make.com)", url: blockchainConfig.middlewareWebhookUrl }
+        { name: "Middleware (Make.com)", url: blockchainConfig.middlewareWebhookUrl },
+        { name: "GoogleSheets", url: blockchainConfig.googleSheetsUrl }
     ].filter(c => 
         c.url && 
         !c.url.includes('your-webhook-id') && 
         !c.url.includes('api.gercek-veri-borsasi.com') &&
-        !c.url.includes('ocean.api') // Oceanplaceholder'ı filtrele
+        !c.url.includes('ocean.api')
     );
+
+    if (channels.length === 0) {
+        pushLog('MARKET', 'WARNING', `[EXPORT_IDLE] Aktif borsa kanalı bulunamadı. Lütfen .env dosyasına gerçek API adreslerini girin.`);
+        return;
+    }
 
     const broadcastPromises = channels.map(async (channel) => {
         try {
-            await axios.post(channel.url, item, { timeout: 8000 });
+            let payload = item;
+            // Google Sheets için özel veri haritalama (veri1, veri2, veri3)
+            if (channel.name === "GoogleSheets") {
+                payload = {
+                    veri1: item.id,
+                    veri2: `$${item.price} USDT`,
+                    veri3: new Date().toLocaleString('tr-TR')
+                };
+            }
+            await axios.post(channel.url, payload, { timeout: 10000 });
             pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
         } catch (err: any) {
             pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);

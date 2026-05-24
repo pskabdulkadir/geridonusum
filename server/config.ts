@@ -34,7 +34,8 @@ export const blockchainConfig = {
     marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.gercek-veri-borsasi.com/v1/list', // Dış pazar yerinin API adresi
     oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/publish',
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
-    openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create'
+    openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
+    googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxELUhBg5SKEQ4pWD21fhRfrJSL8HXKC3uoi0cHauoIea_StW02kkW_JbuC61spVLva/exec'
 };
 
 export const dbConfig = {
