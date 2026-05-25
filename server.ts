@@ -280,6 +280,27 @@ ReadyToSellSchema.index({ id: 1 }, { unique: true });
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 const ReadyToSellModel = mongoose.model("ReadyToSell", ReadyToSellSchema);
 
+/**
+ * PROTOKOL: Sistem Başlatma ve Temizlik (RESET)
+ * Veritabanındaki eski/sahte verileri temizler ve otonom döngüyü sıfırlar.
+ */
+async function initializeSystem() {
+  try {
+    // 1. Veritabanı temizliği (Canlı üretim öncesi temizlik)
+    await TransactionModel.deleteMany({});
+    await ReadyToSellModel.deleteMany({});
+    
+    // 2. State sayaçlarını sıfırla
+    serverState.batchVolumeAccumulatedKB = 0;
+    serverState.totalGreenCredits = 0;
+    serverState.totalRealizedCash = 0;
+
+    pushLog('SYSTEM', 'SUCCESS', `[RESET_COMPLETE] Tüm sahte veriler temizlendi. Sistem CANLI ÜRETİM modunda.`);
+  } catch (err: any) {
+    pushLog('SYSTEM', 'ERROR', `Sistem sıfırlama hatası: ${err.message}`);
+  }
+}
+
 // UNHANDLED ERROR CATCHER - Prevent 502 by keeping process alive
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   pushLog('SYSTEM', 'WARNING', `Beklenmedik Rejection: ${reason}`);
@@ -925,6 +946,9 @@ async function startServer() {
     
     await mongoose.connect(uri, { dbName: dbConfig.dbName });
     pushLog('SYSTEM', 'SUCCESS', `Atlas Cluster Bağlantısı OK: ${dbConfig.dbName}`);
+
+    // PROTOKOL_RESET: Canlıya geçerken veritabanını ve state'i temizle
+    await initializeSystem();
   } catch (error: any) {
     pushLog('SYSTEM', 'ERROR', `Kritik Bağlantı Hatası: ${error.message}`);
     console.error("[CRITICAL] MongoDB connection failed:", error.message);
