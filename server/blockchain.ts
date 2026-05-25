@@ -218,7 +218,7 @@ export class BlockchainRouter {
       // Veri (Value)
       const value = {
         id: dataAssetId,
-        accessFee: ethers.utils.parseUnits(accessPrice.toFixed(18), 18), // Fiyatı Wei'ye çevir
+        accessFee: ethers.utils.parseUnits((accessPrice || 0).toFixed(18), 18), // Fiyatı Wei'ye çevir (Safety check eklendi)
         publisher: wallet.address // seller yerine publisher
       };
 

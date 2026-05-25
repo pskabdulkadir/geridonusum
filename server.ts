@@ -70,10 +70,10 @@ export const mainCrawler = new WebCrawler({
 
 // 1. HEDEF BELİRLEME (Seed URLs)
 const crawlerSeeds = [
-  "https://data.gov", // ABD Açık Veri
-  "https://data.europa.eu/en", // Avrupa Birliği Açık Veri Portalı
-  "https://earthdata.nasa.gov", // NASA Dünya Gözlem Verileri
-  "https://www.unep.org/resources/report" // BM Çevre Raporları
+  "https://wikipedia.org",
+  "https://html.spec.whatwg.org",
+  "https://www.w3.org/Consortium/mission",
+  "https://en.wikipedia.org/wiki/Sustainable_computing"
 ];
 
 // 2. ATIK TANIMI & FİLTRELEME KRİTERLERİ
@@ -103,33 +103,31 @@ const serverState = {
   autonomousMode: false,
   commitThreshold: 10,
   batchVolumeAccumulatedKB: 0, // Toplu işlem için biriken hacim
-  totalDataInsightsPublished: 0, // Yayınlanan veri analitiği raporu sayısı
-  totalAccessFeesCollected: 0, // Tahsil edilen gerçek USD (veri erişim ücretleri)
+  totalGreenCredits: 0, // Üretilen varlık (Green Credits)
+  totalRealizedCash: 0, // Tahsil edilen gerçek USD
 };
 
 /**
  * --- GERÇEK FİNANSAL MUTABAKAT MOTORU ---
- * Sistemin ürettiği veri analitiği kanıtını merkeziyetsiz veri ağına (Ocean) kaydeder.
+ * Sistemin ürettiği kanıtı doğrudan finansal sisteme "nakit" olarak tanıtır.
  */
-async function registerDataAsset(dataAssetId: string, dataInsightValue: number, source: string, license: string) {
+async function mutabakatMotoru(assetId: string, krediDegeri: number) {
     try {
-        // 1. ADIM: Veri Analitiği Raporunu (Insight) Ağ Protokolüne Hazırla
+        // 1. ADIM: Dijital Kanıtı (Proof) Finansal Protokole Hazırla
         const proofOfCleansing = {
-            id: dataAssetId,
+            id: assetId,
             timestamp: Date.now(),
-            value: dataInsightValue,
-            status: "PENDING_REGISTRATION", // PENDING_SETTLEMENT yerine PENDING_REGISTRATION
-            protocol: "DATA_LOGISTICS_v1",
-            sourceAttribution: source,
-            licenseType: license
+            value: krediDegeri,
+            status: "PENDING_SETTLEMENT",
+            protocol: "GREEN_FINANCE_v1",
         };
 
         // 2. ADIM: Yayın Kuyruğuna Ekle (Fire-and-Forget / Non-blocking)
         publishQueue.push(proofOfCleansing);
-
+        
         // 3. ADIM: Kuyruğa Ekle (Async Isolation)
-        settlementQueue.push({ assetId: dataAssetId, creditValue: dataInsightValue });
-        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${dataAssetId} veri varlığı kayıt kuyruğuna eklendi.`);
+        settlementQueue.push({ assetId, creditValue: krediDegeri });
+        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${assetId} mutabakat kuyruğuna eklendi.`);
     } catch (error: any) {
         pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
     }
@@ -141,17 +139,17 @@ async function processSettlementQueue() {
     if (!task) return;
 
     try {
-        const collectedAccessFee = await finalizeDataAssetAccess({ id: task.assetId, value: task.creditValue });
-        serverState.totalAccessFeesCollected += collectedAccessFee;
-        // GÜNCEL VERİ ERİŞİM ÜCRETİ LOGU
-        pushLog('MARKET', 'SUCCESS', `[ACCESS_FEE_COLLECTED] ID: ${task.assetId} | Tahsil Edilen Erişim Ücreti: ${collectedAccessFee.toFixed(4)} USDT. Payout Adresi: ${web3Config.payoutWallet}`);
+        const settledAmount = await finalizeFinancialSettlement({ id: task.assetId, value: task.creditValue });
+        serverState.totalRealizedCash += settledAmount;
+        // GÜNCEL SATIŞ ARZI LOGU
+        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${web3Config.payoutWallet}`);
         
         // Nakit akışını Google Sheets'e işle
-        await logDataAssetActivity({
-            type: "SERVICE_FEE_REPORT",
+        await logToGreenLedger({
+            type: "LIQUIDITY_SETTLEMENT",
             assetId: task.assetId,
-            profitUsdt: collectedAccessFee.toFixed(4),
-            status: "COLLECTED_ACCESS_FEE",
+            profitUsdt: settledAmount.toFixed(4),
+            status: "REALIZED_CASH",
             payoutAddress: web3Config.payoutWallet
         });
     } catch (err: any) {
@@ -182,20 +180,30 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
       throw new Error("Ocean Market Contract Address (nftAddress) is not configured correctly in .env");
     }
     
-    pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] Veri ${proof.id} Ocean Protocol Smart Contract'ına gönderiliyor...`);
+    pushLog('FINANCE', 'INFO', `[ASSET_PUBLISH] Veri ${proof.id} ticari varlığa dönüştürülüyor...`);
+    
+    // --- TIP GÜVENLİĞİ VE TANIMLAMA (HATA ONARIMI) ---
+    const safeValue = parseFloat(proof.value || 0).toFixed(6);
+    const createdDataInsight = {
+        id: proof.id,
+        timestamp: proof.timestamp || Date.now()
+    };
+
+    const dateStr = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }).replace(/ /g, '_').toLowerCase();
+    const assetName = `günlük_karbon_verisi_${dateStr}_${createdDataInsight.id}`;
 
     // PROTOKOL: Ocean Provider API üzerinden otonom Data NFT ve Datatoken mühürleme
     // Ocean Protocol v4 DDO (Decentralized Data Object) yapısı oluşturuluyor
     const ddoPayload = {
       "@context": ["https://w3id.org/did/v1", "https://w3id.org/did/v2"],
-      "id": `did:op:${nftAddress}-${chainId}-${proof.id}`, // Varlık için benzersiz bir DID
+      "id": `did:op:${nftAddress}-${chainId}-${createdDataInsight.id}`, // Varlık için benzersiz bir DID
       "version": "4.0.0",
       "chainId": chainId,
       "nftAddress": nftAddress, // Data NFT kontrat adresi
       "metadata": {
-        "name": `Cleaned-Data-Proof-${proof.id}`,
+        "name": assetName,
         "type": "dataset",
-        "description": "Autonomous data cleansing proof generated by AI agent for sustainable infrastructure.",
+        "description": "AI tarafından optimize edilmiş yüksek kaliteli sürdürülebilirlik verisi. Karbon tasarrufu ve enerji verimliliği metriklerini içerir.",
         "author": "Abdulkadir_Darphane_Node",
         "dateCreated": new Date(proof.timestamp).toISOString(),
         "additionalInformation": {
@@ -208,7 +216,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
           "id": "1",
           "type": "access",
           "files": [], // Doğrudan dosya referansı yerine proofData metadata içinde
-          "serviceEndpoint": "https://provider.mainnet.oceanprotocol.com",
+          "serviceEndpoint": "https://provider.oceanprotocol.com",
           "timeout": 0,
           "datatokenAddress": nftAddress // Data NFT adresi aynı zamanda datatoken adresi olarak kullanılıyor
         }
@@ -235,17 +243,17 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
       attempts++;
       try {
         // 1. ADIM: Metadata'ya kaydet (Aquarius Servisi)
-        const metadataUrl = `${currentAquarius.replace(/\/$/, '')}/api/aquarius/assets/ddo`;
-        pushLog('FINANCE', 'INFO', `[METADATA_PUBLISH] Deneniyor: ${currentAquarius}`);
+        const metadataUrl = "https://aquarius.oceanprotocol.com/api/aquarius/assets/ddo";
+        pushLog('FINANCE', 'INFO', `[METADATA_PUBLISH] Varlık kimliği dizine ekleniyor...`);
         await axios.post(metadataUrl, ddoPayload, {
           headers: commonHeaders,
           timeout: 20000 // Global ağ gecikmeleri için süre artırıldı
         });
-        pushLog('FINANCE', 'SUCCESS', `[AQUARIUS_INDEXED] DDO Aquarius'a kaydedildi.`);
+        pushLog('FINANCE', 'SUCCESS', `[METADATA_INDEXED] Varlık Aquarius pazar dizinine mühürlendi.`);
 
         // 2. ADIM: Provider'a bildir (Servisi başlat)
-        const providerUrl = "https://v4.provider.oceanprotocol.com/api/services/initialize";
-        pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] Provider Handshake başlatılıyor...`);
+        const providerUrl = "https://provider.oceanprotocol.com/api/services/initialize";
+        pushLog('FINANCE', 'INFO', `[PROVIDER_MINTING] Datatoken ve erişim katmanı oluşturuluyor...`);
         response = await axios.post(providerUrl, {
           document: ddoPayload, // Tam DDO objesi
           serviceId: ddoPayload.services[0].id, // DDO içindeki ilk servisin ID'si
@@ -263,7 +271,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
       } catch (error: any) {
         if (attempts < maxRetries) {
           const backoff = 3000 * Math.pow(2, attempts - 1); // Exponential backoff (3s, 6s, 12s)
-          pushLog('FINANCE', 'WARNING', `[GLOBAL_API_RETRY] Ocean Protocol bağlantı hatası, ${backoff/1000}sn içinde yeniden deneniyor (${attempts}/${maxRetries}): ${error.message}`);
+          pushLog('FINANCE', 'WARNING', `[RETRY] Pazar bağlantısı bekleniyor, ${backoff/1000}sn sonra tekrar denenecek...`);
           await new Promise(resolve => setTimeout(resolve, backoff));
         } else {
           throw error; // Maksimum deneme sayısına ulaşıldı, hatayı fırlat
@@ -272,7 +280,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     }
 
     if (response && (response.status === 200 || response.status === 201)) {
-      pushLog('FINANCE', 'SUCCESS', `[MINT_SUCCESS] Otonom Data NFT basıldı ve Ocean Market'te listelendi! ID: ${proof.id}`);
+      pushLog('FINANCE', 'SUCCESS', `[MARKET_LISTING_SUCCESS] Veri NFT ve Datatoken basıldı. Ocean Market'te yayına girdi! ID: ${proof.id}`);
       
       // Başarı durumunda mülkiyet kanıtını konsola mühürle
       const ddoAddress = response.data?.did || "ZİNCİR_ÜSTÜ_DOĞRULANIYOR";
@@ -376,8 +384,8 @@ async function initializeSystem() {
     
     // 2. State sayaçlarını sıfırla
     serverState.batchVolumeAccumulatedKB = 0;
-    serverState.totalDataInsightsPublished = 0;
-    serverState.totalAccessFeesCollected = 0;
+    serverState.totalGreenCredits = 0;
+    serverState.totalRealizedCash = 0;
 
     pushLog('SYSTEM', 'SUCCESS', `[RESET_COMPLETE] Tüm sahte veriler temizlendi. Sistem CANLI ÜRETİM modunda.`);
   } catch (err: any) {
@@ -443,69 +451,69 @@ function pushLog(
  * Görev Tipi: DATA_CLEANING_TASK
  * Mining: Piyasa fırsatlarını ve yeni veri kaynaklarını otonom tarar.
  */
-async function checkDataInsightOpportunity() {
+async function checkMarketOpportunity() {
   if (mongoose.connection.readyState !== 1) return { isProfitable: false };
   
-  // PROTOKOL_FIX: Sadece satılmamış VE henüz erişim voucheri imzalanmamış paketleri işle
-  // Bu satır, zaten yayınlanmış veri varlıklarının tekrar işlenmesini engeller.
+  // PROTOKOL_FIX: Sadece satılmamış VE henüz mühürlenmemiş (signature yok) paketleri işle
+  // Bu satır eco-ymeen4 gibi mühürlenmiş ürünlerin tekrar işlenmesini engeller.
   const item = await ReadyToSellModel.findOne({ 
     isSold: false, 
-    accessVoucherSignature: { $exists: false } 
+    signature: { $exists: false } 
   }).sort({ timestamp: 1 });
   
   return {
-    isAvailableForAccess: !!item, // isProfitable yerine isAvailableForAccess
+    isProfitable: !!item,
     item: item
   };
 }
 
-async function signDataAssetAccessVoucher(dataAssetId: string) { // broadcastToNetwork yerine signDataAssetAccessVoucher
+async function broadcastToNetwork(itemId: string) {
   try {
-    const item = await ReadyToSellModel.findOne({ id: dataAssetId });
+    const item = await ReadyToSellModel.findOne({ id: itemId });
     if (!item) return;
 
-    // PROTOKOL_REAL: Gas ücreti ödemeden veri erişim voucheri oluştur
-    const accessVoucherSignature = await mainBlockchain.createSignedAccessVoucher( // signature yerine accessVoucherSignature
-      dataAssetId, 
-      item.co2AnalysisGrams, // co2SavingsGrams yerine co2AnalysisGrams
-      item.accessPriceUSD // marketPriceUSD yerine accessPriceUSD
+    // PROTOKOL_REAL: Gas ücreti ödemeden kriptografik imza (Voucher) oluştur
+    const signature = await mainBlockchain.createSignedSaleOrder(
+      itemId, 
+      item.co2SavingsGrams, 
+      item.marketPriceUSD
     );
     
-    const publisherAddress = mainBlockchain.getWalletAddress(); // sellerAddress yerine publisherAddress
+    const sellerAddress = mainBlockchain.getWalletAddress();
 
-    if (accessVoucherSignature && publisherAddress) {
-      const accessPriceWei = ethers.utils.parseUnits(item.accessPriceUSD.toFixed(18), 18).toString(); // valuationWei yerine accessPriceWei
-      const priceFormatted = item.accessPriceUSD.toFixed(4);
+    if (signature && sellerAddress) {
+      const valuationWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString();
+      const priceFormatted = item.marketPriceUSD.toFixed(4);
 
-      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${dataAssetId} için veri erişim voucheri imzalanıyor. Fiyat: $${priceFormatted} USDT.`);
-      await ReadyToSellModel.updateOne({ id: dataAssetId }, { 
-        accessVoucherSignature: accessVoucherSignature, // signature yerine accessVoucherSignature
-        publisherAddress: publisherAddress, // sellerAddress yerine publisherAddress
-        accessPriceWei: accessPriceWei // valuationWei yerine accessPriceWei
+      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${priceFormatted} USDT mühürlendi.`);
+      await ReadyToSellModel.updateOne({ id: itemId }, { 
+        signature: signature,
+        sellerAddress: sellerAddress,
+        valuationWei: valuationWei
       });
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[ACCESS_VOUCHER_CREATED] ${dataAssetId} için kriptografik veri erişim voucheri oluşturuldu. Alıcı bekleniyor.`);
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
 
-      // PROTOKOL_DISTRIBUTE: Veri varlığı raporunu tüm pazar yeri kanallarına dağıt
-      await distributeDataAssetReport({ // broadcastToAllMarkets yerine distributeDataAssetReport
-        id: dataAssetId,
-        accessVoucherSignature: accessVoucherSignature,
-        accessPrice: item.accessPriceUSD,
-        publisherAddress: publisherAddress,
-        accessPriceWei: accessPriceWei
+      // PROTOKOL_EXPORT: Varlığı tüm pazar yeri kanallarına aynı anda ihraç et
+      await broadcastToAllMarkets({
+        id: itemId,
+        signature: signature,
+        price: item.marketPriceUSD,
+        sellerAddress: sellerAddress,
+        valuationWei: valuationWei
       });
     } else {
       throw new Error("Cüzdan yetkilendirme hatası.");
     }
   } catch (err: any) {
-    pushLog('BLOCKCHAIN', 'ERROR', `[VOUCHER_SIGN_FAILED] ${err.message}`);
+    pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] ${err.message}`);
   }
 }
 
 /**
- * PROTOKOL: Çok Kanallı Veri Varlığı Raporu Dağıtım Motoru
- * Promise.allSettled kullanarak tüm veri pazar yerlerine paralel yayın yapar.
+ * PROTOKOL: Çok Kanallı İhracat Motoru
+ * Promise.allSettled kullanarak tüm piyasalara paralel yayın yapar.
  */
-async function distributeDataAssetReport(item: any) { // broadcastToAllMarkets yerine distributeDataAssetReport
+async function broadcastToAllMarkets(item: any) {
     const channels = [
         { name: "OceanProtocol", url: blockchainConfig.oceanProtocolUrl },
         { name: "CustomMarket", url: blockchainConfig.marketplaceApiUrl },
@@ -514,12 +522,12 @@ async function distributeDataAssetReport(item: any) { // broadcastToAllMarkets y
     ].filter(c => 
         c.url && 
         !c.url.includes('your-webhook-id') && 
-        !c.url.includes('api.data-analytics-hub.com') && // Eski adres
-        !c.url.includes('ocean.api') // Eski adres
+        !c.url.includes('api.gercek-veri-borsasi.com') &&
+        !c.url.includes('ocean.api')
     );
 
     if (channels.length === 0) {
-        pushLog('MARKET', 'WARNING', `[DISTRIBUTION_IDLE] Aktif veri pazar yeri kanalı bulunamadı. Lütfen .env dosyasına gerçek API adreslerini girin.`);
+        pushLog('MARKET', 'WARNING', `[EXPORT_IDLE] Aktif borsa kanalı bulunamadı. Lütfen .env dosyasına gerçek API adreslerini girin.`);
         return;
     }
 
@@ -527,18 +535,18 @@ async function distributeDataAssetReport(item: any) { // broadcastToAllMarkets y
         try {
             let payload;
             
-            // Protokol Ayrımı: Erişim Ücreti Toplama Raporu mu yoksa Veri Varlığı Raporu mu?
-            if (item.type === "ACCESS_FEE_COLLECTION") { // CASH_FLOW yerine ACCESS_FEE_COLLECTION
-              if (channel.name !== "GoogleSheets") return; // Erişim ücreti raporu sadece tabloya gider
+            // Protokol Ayrımı: Finansal Rapor mu yoksa Varlık İhracatı mı?
+            if (item.type === "CASH_FLOW") {
+              if (channel.name !== "GoogleSheets") return; // Finansal rapor sadece tabloya gider
               payload = {
-                veri1: "VERI_ERISIM_UCRETI_TAHSIL_EDILDI",
-                veri2: `${item.amount} ${item.ticker} @ ${item.accessPrice} USDT`, // price yerine accessPrice
+                veri1: "TOPLU_SATIS_TETIKLENDI",
+                veri2: `${item.amount} ${item.ticker} @ ${item.price} USDT`,
                 veri3: new Date().toLocaleString('tr-TR')
               };
             } else {
-              // Standart Veri Varlığı Raporu
-              payload = channel.name === "GoogleSheets"
-                ? { veri1: item.id, veri2: `$${item.accessPrice} USDT`, veri3: new Date().toLocaleString('tr-TR') } // price yerine accessPrice
+              // Standart Varlık İhracatı
+              payload = channel.name === "GoogleSheets" 
+                ? { veri1: item.id, veri2: `$${item.price} USDT`, veri3: new Date().toLocaleString('tr-TR') }
                 : item;
             }
 
@@ -546,11 +554,11 @@ async function distributeDataAssetReport(item: any) { // broadcastToAllMarkets y
             await axios.post(channel.url, payload, { timeout: 10000 });
 
             if (channel.name === "GoogleSheets") {
-                const msg = item.type === "ACCESS_FEE_COLLECTION" ? "Erişim ücreti tahsilat raporu işlendi." : "Veri varlığı raporu dağıtım sinyali gönderildi.";
-                pushLog('MARKET', 'SUCCESS', `[REPORT_DISTRIBUTED] ${msg} (Google Sheets).`);
+                const msg = item.type === "CASH_FLOW" ? "Nakit akışı raporu işlendi." : "Veri aktarım sinyali gönderildi.";
+                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${msg} (Google Sheets).`);
             }
         } catch (err: any) {
-            pushLog('MARKET', 'ERROR', `[REPORT_DISTRIBUTION_FAILED] ${channel.name}: ${err.message}`);
+            pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);
         }
     });
 
@@ -558,9 +566,9 @@ async function distributeDataAssetReport(item: any) { // broadcastToAllMarkets y
 }
 
 /**
- * 2. ADIM: Veri Varlığı Yayınlama Tetikleyici (Veri Lojistiği Entegrasyonu)
+ * 2. ADIM: Satış Emri Tetikleyici (Ticaret Motoru Entegrasyonu)
  */
-async function executeDataAssetBatchPublish() { // executeBatchTrade yerine executeDataAssetBatchPublish
+async function executeBatchTrade() {
     const isBatchEnabled = process.env.BATCH_MINING !== "false";
     const threshold = 512000; // 500 MB (KB cinsinden)
 
@@ -568,20 +576,20 @@ async function executeDataAssetBatchPublish() { // executeBatchTrade yerine exec
     if ((!isBatchEnabled && serverState.batchVolumeAccumulatedKB > 0) || 
         (serverState.batchVolumeAccumulatedKB >= threshold)) {
         
-        pushLog('GREEN_FINANCE', 'SUCCESS', `[DATA_ASSET_BATCH_PUBLISH] ${!isBatchEnabled ? 'Anlık Gönderim' : '500 MB limit doldu'}. Ocean Protocol'e toplu yayınlanıyor...`);
+        pushLog('GREEN_FINANCE', 'SUCCESS', `[CANLI_İHRACAT] ${!isBatchEnabled ? 'Anlık Gönderim' : '500 MB limit doldu'}. Global Ocean Network'e gönderiliyor...`);
         
-        // Burada sadece Veri Varlığı Kaydı tetiklenir
-        await performDataAssetRegistration(); // performBlockchainSettlement yerine performDataAssetRegistration
+        // Burada sadece Blockchain Settlement tetiklenir
+        await performBlockchainSettlement(); 
         
         serverState.batchVolumeAccumulatedKB = 0; // Döngü sıfırlandı
     }
 }
 
-async function performDataAssetRegistration() { // performBlockchainSettlement yerine performDataAssetRegistration
+async function performBlockchainSettlement() {
     const assetId = `BATCH_EXPORT_${Date.now()}`;
     const kiloBytes = serverState.batchVolumeAccumulatedKB;
-    // Toplu yayınlarda varsayılan olarak CC-BY lisansı ve portal kaynağı kullanılır
-    await generateDataInsight(assetId, kiloBytes, "Global Open Data Portals", "CC-BY 4.0");
+    // Mevcut darphane motoru üzerinden zincir üstü kaydı gerçekleştir
+    await darphaneMotoru(assetId, kiloBytes);
 }
 
 /**
@@ -595,17 +603,17 @@ async function startAutomatedTrading() {
   }
 
   // Finansal Modül Kontrolü
-  await executeDataAssetBatchPublish(); // executeBatchTrade yerine executeDataAssetBatchPublish
+  await executeBatchTrade();
 
   try {
     // Onay eşiği kontrolü: Satılmamış öğe sayısı eşiğe ulaştı mı?
     const pendingCount = await ReadyToSellModel.countDocuments({ isSold: false });
     
     if (pendingCount >= serverState.commitThreshold || serverState.autonomousMode) {
-      const opportunity = await checkDataInsightOpportunity(); // checkMarketOpportunity yerine checkDataInsightOpportunity
-      if (opportunity.isAvailableForAccess && opportunity.item) { // isProfitable yerine isAvailableForAccess
+      const opportunity = await checkMarketOpportunity();
+      if (opportunity.isProfitable && opportunity.item) {
         pushLog('EXECUTOR', 'ANALYZE', `[BATCH_COMMIT] ${opportunity.item.id} otonom işleme alınıyor.`);
-        await signDataAssetAccessVoucher(opportunity.item.id); // broadcastToNetwork yerine signDataAssetAccessVoucher
+        await broadcastToNetwork(opportunity.item.id);
       }
     } else {
       if (pendingCount > 0) {
@@ -658,20 +666,18 @@ async function runRecyclingMining() {
       const valuation = mainOptimizer.calculateDataValue(qualityScore, metric.bytesSaved);
       const valuationWei = ethers.utils.parseUnits(valuation.toFixed(18), 18).toString();
       const proofHash = mainOptimizer.generateProofHash(url, metric.bytesSaved, metric.co2SavingsGrams, optimizedHtml);
-      
+
       const newItem: ReadyToSellItem = {
         id: generatedId,
         url,
         proofHash,
-        co2AnalysisGrams: metric.co2SavingsGrams, // co2SavingsGrams yerine co2AnalysisGrams
+        co2SavingsGrams: metric.co2SavingsGrams,
         extractedKeywords: ["recyclable", "dark-data", "carbon-offset"],
-        reportSummary: `Web sayfası ${url} için karbon emisyon verisi analizi tamamlandı.`,
-        accessPriceUSD: valuation, // marketPriceUSD yerine accessPriceUSD
+        reportSummary: `STRÜKTÜREL GERİ DÖNÜŞÜM: ${url} düğümü başarıyla optimize edildi.`,
+        marketPriceUSD: valuation,
         isSold: false,
         timestamp: new Date().toISOString(),
-        accessPriceWei: valuationWei, // valuationWei yerine accessPriceWei
-        licenseType: "Creative Commons Attribution",
-        sourceAttribution: url
+        valuationWei: valuationWei
       };
 
       if (mongoose.connection.readyState === 1) {
@@ -679,18 +685,18 @@ async function runRecyclingMining() {
         pushLog('SYSTEM', 'SUCCESS', `[DB_COMMIT] Varlık Atlas Cluster'a mühürlendi: ${savedDoc.id}`);
 
         // --- PAZAR YERİ LİSTELEME (OFF-CHAIN / GASLESS) ---
-        const result = await mainMarketplace.prepareDataAssetForAccess(generatedId, valuation); // prepareAssetForSale yerine prepareDataAssetForAccess
-        pushLog('MARKET', 'SUCCESS', `[DATA_ASSET_READY] Veri analitiği raporu erişime hazırlandı. Durum: ${result.status}`);
+        const result = await mainMarketplace.prepareAssetForSale(generatedId, valuation);
+        pushLog('MARKET', 'SUCCESS', `[ASSET_READY] Varlık satışa hazırlandı. Durum: ${result.status}`);
 
         serverState.pagesProcessed++;
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
         serverState.batchVolumeAccumulatedKB += metric.bytesSaved; // Hacmi biriktir
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
-        pushLog('MARKET', 'SUCCESS', `[NEW_DATA_INSIGHT] Veri analitiği raporu envantere eklendi. Değer: $${valuation} USDT`);
+        pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
 
-        await signDataAssetAccessVoucher(generatedId); // broadcastToNetwork yerine signDataAssetAccessVoucher
+        await broadcastToNetwork(generatedId);
 
-        await executeDataAssetBatchPublish(); // executeBatchTrade yerine executeDataAssetBatchPublish
+        await executeBatchTrade();
       }
     });
   } catch (err: any) {
@@ -719,10 +725,10 @@ pushLog('SYSTEM', 'INFO', 'Üretim Çekirdeği: Executor ve Ledger modülleri ak
 app.post("/api/market/publish-all", async (req, res) => {
   try {
     const pendingItems = await ReadyToSellModel.find({ isSold: false });
-    pushLog('MARKET', 'ANALYZE', `[BATCH_PUBLISH] ${pendingItems.length} veri varlığı için toplu yayın başlatıldı.`);
+    pushLog('MARKET', 'ANALYZE', `[BATCH_PUSH] ${pendingItems.length} varlık için toplu onay başlatıldı.`);
     
     for (const item of pendingItems) {
-      await signDataAssetAccessVoucher(item.id); // broadcastToNetwork yerine signDataAssetAccessVoucher
+      await broadcastToNetwork(item.id);
     }
     
     res.json({ success: true, count: pendingItems.length });
@@ -787,7 +793,7 @@ app.get("/api/stats", async (req, res) => {
       optimizedSizeTotal: serverState.optimizedSizeTotal,
       totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      dataAssetRegistrations: blockchainProofsMinted, // blockchainProofsMinted yerine dataAssetRegistrations
+      blockchainProofsMinted: blockchainProofsMinted,
       transactions: transactions,
       visitedUrls: Array.from(serverState.visitedUrls),
       totalEarnings: totalEarnings,
@@ -795,11 +801,12 @@ app.get("/api/stats", async (req, res) => {
       currentCrawlingUrl: serverState.currentCrawlingUrl,
       readyToSell: readyToSell,
       payoutWalletAddress: serverState.payoutWalletAddress,
+      zeroGasModeActive: serverState.zeroGasModeActive,
       autonomousMode: serverState.autonomousMode,
       commitThreshold: serverState.commitThreshold,
       contractAddress: blockchainConfig.contractAddress,
-      totalDataInsightsPublished: serverState.totalDataInsightsPublished,
-      totalAccessFeesCollected: serverState.totalAccessFeesCollected
+      totalGreenCredits: serverState.totalGreenCredits,
+      totalRealizedCash: serverState.totalRealizedCash
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);
@@ -857,7 +864,7 @@ app.post("/api/payout-config", (req, res) => {
     serverState.zeroGasModeActive = zeroGasModeActive;
   }
   
-  pushLog('SYSTEM', 'SUCCESS', `Yayıncı ayarları güncellendi. Hedef: ${serverState.payoutWalletAddress} | Sıfır-Gas Erişim Modu: ${serverState.zeroGasModeActive ? "AKTİF" : "PASİF"}`);
+  pushLog('SYSTEM', 'SUCCESS', `Cüzdan ayarları güncellendi. Hedef: ${serverState.payoutWalletAddress} | Sıfır-Gas Satış Modu: ${serverState.zeroGasModeActive ? "AKTİF" : "PASİF"}`);
   res.json({ success: true, payoutWalletAddress: serverState.payoutWalletAddress, zeroGasModeActive: serverState.zeroGasModeActive });
 });
 
@@ -876,8 +883,8 @@ app.post("/api/market/confirm-sale", async (req, res) => {
     const record: TransactionRecord = {
       url: item.url,
       proofHash: item.proofHash,
-      co2AnalysisGrams: item.co2AnalysisGrams, // savedGrams yerine co2AnalysisGrams
-      assetRegistrationTxHash: txHash, // txHash yerine assetRegistrationTxHash
+      savedGrams: item.co2SavingsGrams,
+      txHash: txHash,
       timestamp: new Date().toISOString()
     };
 
@@ -885,7 +892,7 @@ app.post("/api/market/confirm-sale", async (req, res) => {
       await TransactionModel.create(record);
     }
     
-    pushLog('BLOCKCHAIN', 'SUCCESS', `[ON_CHAIN_ACCESS_GRANTED] Veri varlığı ${itemId} için erişim sağlandı! Tx: ${txHash}`);
+    pushLog('BLOCKCHAIN', 'SUCCESS', `[ON_CHAIN_SALE] Varlık ${itemId} başarıyla satıldı! Tx: ${txHash}`);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -971,7 +978,7 @@ app.post("/api/optimize-url", async (req, res) => {
     const originalBytes = Buffer.byteLength(html);
 
     // 2. Optimizasyon ve Hesaplama
-    const optimizedHtml = mainOptimizer.optimizeHtml(html); // Bu kısım hala "temizleme" olarak kalabilir, çünkü veriyi daha verimli hale getiriyor.
+    const optimizedHtml = mainOptimizer.optimizeHtml(html);
     const optimizedBytes = Buffer.byteLength(optimizedHtml);
     
     // PROTOKOL_1: Otonom Matematiksel Analiz
@@ -992,10 +999,10 @@ app.post("/api/optimize-url", async (req, res) => {
       id: generatedId,
       url,
       proofHash,
-      co2AnalysisGrams: savings.co2SavingsGrams, // co2SavingsGrams yerine co2AnalysisGrams
-      extractedKeywords: ["data-analytics", "environmental-data", "web-optimization"],
-      reportSummary: `Web sayfası ${url} için karbon emisyon verisi analizi tamamlandı. ${savings.co2SavingsGrams.toFixed(4)}g CO2 emisyonu analiz edildi.`,
-      accessPriceUSD: valuation, // marketPriceUSD yerine accessPriceUSD
+      co2SavingsGrams: savings.co2SavingsGrams,
+      extractedKeywords: ["asset", "real-data", "mined"],
+      reportSummary: `Doğrulanmış Karbon Varlığı: ${url} üzerinden ${savings.co2SavingsGrams.toFixed(4)}g CO2 tasarrufu mühürlendi.`,
+      marketPriceUSD: valuation,
       isSold: false,
       timestamp: new Date().toISOString()
     };
@@ -1004,14 +1011,14 @@ app.post("/api/optimize-url", async (req, res) => {
       await ReadyToSellModel.create(newItem);
     }
 
-    pushLog('EXECUTOR', 'SUCCESS', `[DATA_INSIGHT_REPORT_CREATED] ID: ${generatedId} | KALİTE: ${qualityScore} | DEĞERLEME: ${valuation} USDT`);
+    pushLog('EXECUTOR', 'SUCCESS', `[ASSET_CREATED] ID: ${generatedId} | QUALITY: ${qualityScore} | VALUATION: ${valuation} USDT`);
 
     res.json({
       url,
       originalSize: originalBytes,
       optimizedSize: optimizedBytes,
       bytesSaved: savings.bytesSaved,
-      co2AnalysisGrams: savings.co2SavingsGrams, // co2SavingsGrams yerine co2AnalysisGrams
+      co2SavingsGrams: savings.co2SavingsGrams,
       efficiencyGainPct: savings.efficiencyGainPct,
       proofHash,
       id: generatedId,
@@ -1057,7 +1064,7 @@ async function startServer() {
     }
   };
 
-  // Bağlantıları başlat (await etmiyoruz, böylece Express hemen bir sonraki satıra geçer)
+  // Bağlantıları başlat (await etmiyoruz, böylece bir sonraki satıra geçer)
   initConnections();
 
   // 2. Middleware ve Sunucu Yapılandırması
