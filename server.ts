@@ -103,8 +103,8 @@ const serverState = {
   autonomousMode: false,
   commitThreshold: 10,
   batchVolumeAccumulatedKB: 0, // Toplu işlem için biriken hacim
-  totalGreenCredits: 0, // Üretilen varlık (Green Credits)
-  totalRealizedCash: 0, // Tahsil edilen gerçek USD
+  totalDataInsightsPublished: 0, // Yayınlanan veri analitiği raporu sayısı
+  totalAccessFeesCollected: 0, // Tahsil edilen veri erişim ücretleri
 };
 
 /**
@@ -120,14 +120,13 @@ async function insightLogisticsEngine(assetId: string, dataInsightValue: number)
             value: dataInsightValue,
             status: "PENDING_REGISTRATION",
             protocol: "DATA_LOGISTICS_v1",
+            sourceAttribution: "Global Open Data Portals",
+            licenseType: "CC-BY 4.0"
         };
 
-        // 2. ADIM: Yayın Kuyruğuna Ekle (Fire-and-Forget / Non-blocking)
+        // KRİTİK DEĞİŞİKLİK: Sadece yayın kuyruğuna ekle. 
+        // Mutabakat kuyruğuna (settlementQueue) ekleme işlemi ancak Publish başarılı olursa yapılacak.
         publishQueue.push(proofOfCleansing);
-        
-        // 3. ADIM: Kuyruğa Ekle (Async Isolation)
-        settlementQueue.push({ assetId, creditValue: dataInsightValue });
-        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${assetId} lojistik kuyruğuna eklendi.`);
     } catch (error: any) {
         pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
     }
@@ -139,14 +138,14 @@ async function processSettlementQueue() {
     if (!task) return;
 
     try {
-        const settledAmount = await finalizeDataAssetAccess({ id: task.assetId, value: task.creditValue });
-        serverState.totalRealizedCash += settledAmount;
+        const settledAmount = await finalizeDataAssetAccess({ id: task.assetId, value: task.creditValue || 0 });
+        serverState.totalAccessFeesCollected += settledAmount;
         // GÜNCEL SATIŞ ARZI LOGU
         pushLog('MARKET', 'SUCCESS', `[ACCESS_FEE_COLLECTED] ID: ${task.assetId} | Tahsil Edilen Erişim Ücreti: ${settledAmount.toFixed(4)} USDT.`);
         
         // Nakit akışını Google Sheets'e işle
         await logDataAssetActivity({
-            type: "SERVICE_FEE_REPORT",
+            type: "ACCESS_FEE_COLLECTION",
             assetId: task.assetId,
             profitUsdt: settledAmount.toFixed(4),
             status: "REALIZED_CASH",
@@ -166,12 +165,22 @@ async function processPublishQueue() {
     const task = publishQueue.shift();
     if (!task) return;
 
-    // Yayın işlemini asenkron başlat, ama bekleme (Non-blocking worker)
-    broadcastToGreenFinanceNetwork(task).catch(() => {});
+    try {
+        // Yayın işlemini başlat ve sonucu bekle
+        const isPublished = await broadcastToGreenFinanceNetwork(task);
+    
+        if (isPublished) {
+            // Sadece ve sadece dış dünya onay verirse finansal süreci başlat
+            settlementQueue.push({ assetId: task.id, creditValue: parseFloat(String(task.value || 0)) });
+            pushLog('FINANCE', 'SUCCESS', `[ON_CHAIN_SYNC] ${task.id} başarıyla yayınlandı, mutabakat başlatılıyor.`);
+        }
+    } catch (err) {
+        pushLog('FINANCE', 'ERROR', `[PUBLISH_WORKER_ERROR] ${task.id}: ${err}`);
+    }
 }
 setInterval(processPublishQueue, 20000); // 20 saniyede bir yayın kuyruğunu erit
 
-async function broadcastToGreenFinanceNetwork(proof: any) {
+async function broadcastToGreenFinanceNetwork(proof: any): Promise<boolean> {
   try {
     const chainId = 137; // Polygon Mainnet
     const nftAddress = web3Config.contractAddress; // .env'den gelen Data NFT kontrat adresi
@@ -208,9 +217,10 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
         "type": "dataset",
         "description": "AI tarafından optimize edilmiş yüksek kaliteli sürdürülebilirlik verisi. Karbon tasarrufu ve enerji verimliliği metriklerini içerir.",
         "author": "Abdulkadir_Darphane_Node",
+        "license": "CC-BY 4.0",
         "dateCreated": new Date(proof.timestamp).toISOString(),
         "additionalInformation": {
-          "proofData": proof // Temizlik kanıtı verisi DDO metadata içine gömülüyor
+          "proofData": createdDataInsight // Temizlik kanıtı verisi DDO metadata içine gömülüyor
         },
         "files": [] // Bu örnekte doğrudan bir dosya yerine proofData gönderiliyor
       },
@@ -219,7 +229,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
           "id": "1",
           "type": "access",
           "files": [], // Doğrudan dosya referansı yerine proofData metadata içinde
-          "serviceEndpoint": "https://provider.oceanprotocol.com",
+          "serviceEndpoint": "https://provider.mainnet.oceanprotocol.com",
           "timeout": 0,
           "datatokenAddress": nftAddress // Data NFT adresi aynı zamanda datatoken adresi olarak kullanılıyor
         }
@@ -283,27 +293,29 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     }
 
     if (response && (response.status === 200 || response.status === 201)) {
-      pushLog('FINANCE', 'SUCCESS', `[MARKET_LISTING_SUCCESS] Veri NFT ve Datatoken basıldı. Ocean Market'te yayına girdi! ID: ${proof.id}`);
+      pushLog('FINANCE', 'SUCCESS', `[DATA_ASSET_LISTED] Veri NFT ve Datatoken basıldı. Ocean Market'te yayına girdi! ID: ${proof.id}`);
       
       // Başarı durumunda mülkiyet kanıtını konsola mühürle
       const ddoAddress = response.data?.did || "ZİNCİR_ÜSTÜ_DOĞRULANIYOR";
       pushLog('FINANCE', 'ANALYZE', `[TRACE] DDO / Asset DID: ${ddoAddress}`);
+      return true;
     }
+    return false;
   } catch (error: any) {
-    // Hata mesajında "getaddrinfo ENOTFOUND" gibi detayları yakalamak için
-    pushLog('FINANCE', 'ERROR', `[GLOBAL_API_FAIL] Ocean Protocol bağlantı hatası: ${error.message}`);
+    pushLog('FINANCE', 'ERROR', `[REAL_FAIL] Ocean bağlantısı sağlanamadı. Üretim askıya alındı: ${error.message}`);
+    return false;
   }
 }
 
 async function finalizeDataAssetAccess(proof: any): Promise<number> {
-    // Alıcının (veri merkezi/bulut sağlayıcısı) kanıtı onayladığı ve parayı gönderdiği an.
-    // Gerçek modda API'den dönen 'creditedAmount' değerini döndürür.
-    return proof.value * 0.98; // Borsa ve ağ komisyonları düşülmüş net nakit
+    // Alıcının (araştırmacı/kurum) veri erişim bedelini ödediği mutabakat anı.
+    // Net hizmet bedeli (Service Fee) hesaplanır.
+    return (proof.value || 0) * 0.98; // Ağ komisyonları sonrası kalan hizmet bedeli
 }
 
 // --- İNSANSIZ DARPHANE MOTORU (YEŞİL FİNANS ÇEKİRDEĞİ) ---
 // Amaç: Dijital atığı "Yeşil Kredi"ye dönüştürmek
-async function processDataInsight(assetId: string, kiloByte: number) {
+async function processDataInsight(assetId: string, kiloByte: number, source: string = "Global Open Data", license: string = "CC-BY 4.0") {
     try {
         // 1. ADIM: DİJİTAL KANIT ÜRETİMİ (Proof of Data Cleansing)
         const insightValue = (kiloByte * 0.00045).toFixed(8);
@@ -315,6 +327,8 @@ async function processDataInsight(assetId: string, kiloByte: number) {
             type: "DATA_INSIGHT_INDEX",
             creditValue: insightValue,
             assetRef: assetId,
+            source: source,
+            license: license,
             timestamp: new Date().toISOString()
         };
 
@@ -322,9 +336,9 @@ async function processDataInsight(assetId: string, kiloByte: number) {
         await logDataAssetActivity(dataRecord);
 
         // 3. ADIM: OTONOM ÖDÜLLENDİRME
-        serverState.totalGreenCredits += parseFloat(insightValue);
+        serverState.totalDataInsightsPublished += 1;
         
-        pushLog('FINANCE', 'SUCCESS', `[VALUE_INDEXED] +${insightValue} Analiz Birimi doğrulandı. Biriken Hacim: ${serverState.totalGreenCredits.toFixed(4)}`);
+        pushLog('FINANCE', 'SUCCESS', `[INSIGHT_READY] Veri Analiz Raporu Hazır: ${assetId}. Lisans: ${license}`);
 
         // PROTOKOL_SETTLEMENT: Kredi basıldıktan sonra anında gerçek nakit mutabakatını çalıştır
         await insightLogisticsEngine(assetId, parseFloat(insightValue));
@@ -454,18 +468,17 @@ function pushLog(
  * Görev Tipi: DATA_CLEANING_TASK
  * Mining: Piyasa fırsatlarını ve yeni veri kaynaklarını otonom tarar.
  */
-async function checkMarketOpportunity() {
+async function checkDataInsightOpportunity() {
   if (mongoose.connection.readyState !== 1) return { isProfitable: false };
   
   // PROTOKOL_FIX: Sadece satılmamış VE henüz mühürlenmemiş (signature yok) paketleri işle
-  // Bu satır eco-ymeen4 gibi mühürlenmiş ürünlerin tekrar işlenmesini engeller.
   const item = await ReadyToSellModel.findOne({ 
     isSold: false, 
-    signature: { $exists: false } 
+    accessVoucherSignature: { $exists: false } 
   }).sort({ timestamp: 1 });
   
   return {
-    isProfitable: !!item,
+    isAvailableForAccess: !!item,
     item: item
   };
 }
@@ -611,8 +624,8 @@ async function startAutomatedTrading() {
     const pendingCount = await ReadyToSellModel.countDocuments({ isSold: false });
     
     if (pendingCount >= serverState.commitThreshold || serverState.autonomousMode) {
-      const opportunity = await checkMarketOpportunity();
-      if (opportunity.isProfitable && opportunity.item) {
+      const opportunity = await checkDataInsightOpportunity();
+      if (opportunity.isAvailableForAccess && opportunity.item) {
         pushLog('EXECUTOR', 'ANALYZE', `[BATCH_COMMIT] ${opportunity.item.id} otonom işleme alınıyor.`);
         await signDataAssetAccessVoucher(opportunity.item.id);
       }
@@ -679,7 +692,7 @@ async function runRecyclingMining() {
         isSold: false,
         timestamp: new Date().toISOString(),
         accessPriceWei: valuationWei,
-        licenseType: "Creative Commons Attribution",
+        licenseType: "Creative Commons Attribution (CC-BY 4.0)",
         sourceAttribution: url
       };
 
@@ -688,7 +701,7 @@ async function runRecyclingMining() {
         pushLog('SYSTEM', 'SUCCESS', `[DB_COMMIT] Varlık Atlas Cluster'a mühürlendi: ${savedDoc.id}`);
 
         // --- PAZAR YERİ LİSTELEME (OFF-CHAIN / GASLESS) ---
-        const result = await mainMarketplace.prepareDataAssetForAccess(generatedId, valuation);
+        const result = await mainMarketplace.prepareDataAssetForAccess(savedDoc.id, valuation);
         pushLog('MARKET', 'SUCCESS', `[DATA_ASSET_READY] Veri analitiği raporu erişime hazırlandı. Durum: ${result.status}`);
 
         serverState.pagesProcessed++;
@@ -796,10 +809,10 @@ app.get("/api/stats", async (req, res) => {
       optimizedSizeTotal: serverState.optimizedSizeTotal,
       totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      dataAssetRegistrations: blockchainProofsMinted, 
+      dataAssetRegistrations: blockchainProofsMinted,
       transactions: transactions,
       visitedUrls: Array.from(serverState.visitedUrls),
-      totalServiceFeesCollected: totalEarnings, // totalEarnings -> totalServiceFeesCollected
+      totalServiceFeesCollected: totalEarnings,
       isCrawling: serverState.isCrawling,
       currentCrawlingUrl: serverState.currentCrawlingUrl,
       readyToSell: readyToSell,
@@ -808,8 +821,8 @@ app.get("/api/stats", async (req, res) => {
       autonomousMode: serverState.autonomousMode,
       commitThreshold: serverState.commitThreshold,
       contractAddress: blockchainConfig.contractAddress,
-      totalDataInsightsPublished: serverState.totalGreenCredits, // totalGreenCredits -> totalDataInsightsPublished
-      totalAccessFeesCollected: serverState.totalRealizedCash // totalRealizedCash -> totalAccessFeesCollected
+      totalDataInsightsPublished: serverState.totalDataInsightsPublished,
+      totalAccessFeesCollected: serverState.totalAccessFeesCollected
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);

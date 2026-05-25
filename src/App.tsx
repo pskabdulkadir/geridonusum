@@ -474,7 +474,7 @@ export default function App() {
           </div>
           <div className="mt-4">
             <div className="text-2xl md:text-3xl font-display font-medium text-amber-500 tracking-tight">
-              {stats.totalCo2SavedGrams ? stats.totalCo2SavedGrams.toFixed(4) : "0.0000"} <span className="text-xs font-mono text-slate-400">g CO₂ Analizi</span>
+              {(stats.totalCo2SavedGrams || 0).toFixed(4)} <span className="text-xs font-mono text-slate-400">g CO₂ Analizi</span>
             </div>
             <p className="text-slate-500 text-[10px] mt-1">Erişimi önlenen tahmini karbon emisyonu</p>
           </div>

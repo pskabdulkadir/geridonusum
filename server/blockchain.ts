@@ -79,11 +79,11 @@ export class BlockchainRouter {
       try {
         const provider = new ethers.providers.JsonRpcProvider({
           url: this.rpcUrl,
-          skipFetchSetup: true // NoNetwork hatasını azaltmaya yardımcı olur
+          skipFetchSetup: true
         });
 
-        // Ağın hazır olmasını bekle
-        await provider.ready;
+        // Force network detection
+        await provider.getNetwork();
         await provider.getNetwork();
 
         // Eğer kontrat adresi sıfır değilse, deploy durumunu kontrol et
