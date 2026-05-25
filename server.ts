@@ -187,7 +187,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
           "id": "1",
           "type": "access",
           "files": [], // Doğrudan dosya referansı yerine proofData metadata içinde
-          "serviceEndpoint": "https://v4.provider.oceanprotocol.com",
+          "serviceEndpoint": "https://provider.oceanprotocol.com",
           "timeout": 0,
           "datatokenAddress": nftAddress // Data NFT adresi aynı zamanda datatoken adresi olarak kullanılıyor
         }
@@ -1027,6 +1027,9 @@ async function startServer() {
     // Üretim ortamında veritabanı olmadan sistemin çalışmasını engelliyoruz.
     process.exit(1); 
   }
+
+  // Blockchain kontrat ve cüzdan durumunu doğrula
+  await mainBlockchain.validateOnChainStatus();
 
   // Veritabanı bağlantısı kurulduktan sonra motoru tek bir noktadan başlat
   startAutomatedTrading();

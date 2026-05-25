@@ -59,12 +59,11 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // ÜRETİM MODU DOĞRULAMASI: Cüzdanın ve kontratın geçerliliğini kontrol et
+    // ÜRETİM MODU DOĞRULAMASI: Cüzdanın geçerliliğini kontrol et
     try {
       if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY') || this.privateKey.includes('0xtest')) {
         throw new Error("Invalid private key placeholder");
       }
-      this.validateOnChainStatus();
       this.isRealMode = true;
     } catch (err) {
       this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya geçersiz! Sistem gerçek işlem yapamaz. Lütfen .env dosyasını kontrol edin.");
@@ -72,7 +71,7 @@ export class BlockchainRouter {
     }
   }
 
-  private async validateOnChainStatus() {
+  public async validateOnChainStatus() { // Metodu public yaptık
     const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
     const wallet = new ethers.Wallet(this.privateKey, provider);
     
