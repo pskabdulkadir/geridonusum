@@ -70,6 +70,7 @@ export class BlockchainRouter {
     } catch (err) {
       this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya geçersiz! Sistem gerçek işlem yapamaz. Lütfen .env dosyasını kontrol edin.");
       this.isRealMode = false;
+    }
   }
 
   private async validateOnChainStatus() {
