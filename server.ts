@@ -42,9 +42,9 @@ export const mainCrawler = new WebCrawler({
 // --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
 // Binance ve ccxt gibi merkezi borsa kalıntıları tamamen imha edildi.
 const web3Config = {
-    payoutWallet: process.env.CHANNEL_ROUTING_WALLET || "0x89205abAE846560fdEB791C1fEe17482D2Ec739D",
+    payoutWallet: process.env.PAYOUT_WALLET || process.env.CHANNEL_ROUTING_WALLET || "0x89205abAE846560fdEB791C1fEe17482D2Ec739D",
     rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || "https://polygon-rpc.com",
-    contractAddress: process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
+    contractAddress: process.env.SMART_GATE_CONTRACT_ADDRESS || process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
 };
 
 // 1. HEDEF BELİRLEME (Seed URLs)
@@ -140,7 +140,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     // Ocean Protocol v4 DDO (Decentralized Data Object) yapısı oluşturuluyor
     const ddoPayload = {
       "@context": ["https://w3id.org/did/v1", "https://w3id.org/did/v2"],
-      // "id": `did:op:${nftAddress}-${chainId}-${proof.id}`, // Ocean Provider'ın DID oluşturmasına izin ver
+      "id": `did:op:${nftAddress}-${chainId}-${proof.id}`, // Varlık için benzersiz bir DID
       "version": "4.0.0",
       "chainId": chainId,
       "nftAddress": nftAddress, // Data NFT kontrat adresi
@@ -172,6 +172,12 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     const wallet = new ethers.Wallet(process.env.PRIVATE_KEY);
     const signature = await wallet.signMessage(JSON.stringify(ddoPayload));
 
+    const commonHeaders = {
+      'Content-Type': 'application/json',
+      'X-Ocean-Signature': signature,
+      'X-Ocean-Address': wallet.address
+    };
+
     const maxRetries = 3;
     let attempts = 0;
     let response;
@@ -180,15 +186,21 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     while (attempts < maxRetries && !success) {
       attempts++;
       try {
-        // Doğru uç nokta olan services/publish'e DDO payload'u gönderiliyor
-        response = await axios.post(
-          "https://v4.provider.oceanprotocol.com/api/v1/services/publish",
-          ddoPayload,
-          {
+        // 1. ADIM: Metadata'ya kaydet (Aquarius Servisi)
+        const metadataUrl = "https://v4.aquarius.oceanprotocol.com/api/aquarius/assets/ddo";
+        pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] DDO Aquarius'a kaydediliyor: ${metadataUrl}`);
+        await axios.post(metadataUrl, ddoPayload, {
+          headers: commonHeaders,
+          timeout: 20000 // Global ağ gecikmeleri için süre artırıldı
+        });
+        pushLog('FINANCE', 'SUCCESS', `[AQUARIUS_OK] DDO Aquarius'a başarıyla kaydedildi.`);
+
+        // 2. ADIM: Provider'a bildir (Servisi başlat)
+        const providerUrl = "https://v4.provider.oceanprotocol.com/api/services/initialize";
+        pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] Provider Handshake başlatılıyor...`);
+        response = await axios.post(providerUrl, ddoPayload, {
           headers: {
-            'Content-Type': 'application/json',
-            'X-Ocean-Signature': signature,
-            'X-Ocean-Address': wallet.address
+            ...commonHeaders, // Ortak başlıkları kullan
           },
           timeout: 20000 // Global ağ gecikmeleri için süre 20 saniyeye çıkarıldı
         });
