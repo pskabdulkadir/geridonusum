@@ -51,6 +51,9 @@ export default function App() {
     currentCrawlingUrl: "",
     readyToSell: [],
     payoutWalletAddress: "", // Will be fetched from /api/stats
+    totalGreenCredits: 0,
+    realizedProfitUsdt: 0,
+    totalRealizedCash: 0, // Tahsil edilen gerçek nakit (Settlement)
   }); // zeroGasModeActive kaldırıldı
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -359,6 +362,7 @@ export default function App() {
     else if (module === "OPTIMIZER") textAndBg = "text-emerald-400";
     else if (module === "BLOCKCHAIN") textAndBg = "text-pink-400";
     else if (module === "AI") textAndBg = "text-amber-300";
+    else if (module === "FINANCE") textAndBg = "text-emerald-500 font-bold";
 
     if (level === "ERROR") return "text-red-400 font-semibold border-l-2 border-red-500 pl-1";
     if (level === "WARNING") return "text-yellow-400 font-medium";
@@ -929,20 +933,18 @@ export default function App() {
               <div className="bg-slate-950/90 border border-emerald-500/30 rounded-2xl p-5 w-full md:w-80 shadow-inner shrink-0 relative overflow-hidden text-right">
                 <div className="absolute top-0 left-0 w-12 h-12 bg-emerald-500/5 rounded-full blur-xl"></div>
                 <div className="flex items-center justify-between border-b border-slate-900 pb-2 mb-2">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">AKÜMÜLE OLAN PROTOKOL GELİRİ</span>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">AKÜMÜLE OLAN YEŞİL VARLIK</span>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
-                    <span className="text-[9px] font-mono text-emerald-400">CANLI RAPOR</span>
+                    <span className="text-[9px] font-mono text-emerald-400">MINTING AKTİF</span>
                   </div>
                 </div>
                 <div className="text-3xl md:text-4xl font-display font-medium text-emerald-400 tracking-tight">
-                  ${totalEarnings.toFixed(2)} <span className="text-sm font-mono text-slate-500">USDT</span>
+                  ${stats.totalRealizedCash.toFixed(4)} <span className="text-sm font-mono text-slate-500">USD</span>
                 </div>
-                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center justify-end gap-1">
-                  <span>Otomatik Dağıtım:</span>
-                  <span className="text-cyan-400 select-all font-semibold truncate max-w-[130px]" title={stats.payoutWalletAddress}>
-                    {stats.payoutWalletAddress ? `${stats.payoutWalletAddress.slice(0, 6)}...${stats.payoutWalletAddress.slice(-4)}` : "Atanmadı"}
-                  </span>
+                <div className="mt-2 text-[11px] font-mono text-emerald-500/80 flex items-center justify-end gap-2 border-t border-slate-900 pt-2">
+                   <span>Toplam Kredi:</span>
+                   <span className="font-bold">{stats.totalGreenCredits.toFixed(6)} GC</span>
                 </div>
               </div>
             </div>

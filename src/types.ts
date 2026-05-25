@@ -55,6 +55,9 @@ export interface CoreStats {
   autonomousMode: boolean;
   commitThreshold: number;
   contractAddress: string;
+  totalGreenCredits: number;
+  realizedProfitUsdt: number;
+  totalRealizedCash: number;
   // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
 
@@ -76,7 +79,7 @@ export interface OptimizationResult {
 export interface LogEntry {
   id: string;
   timestamp: string;
-  module: 'SYSTEM' | 'MARKET' | 'EXECUTOR' | 'BLOCKCHAIN' | 'AI';
+  module: 'SYSTEM' | 'MARKET' | 'EXECUTOR' | 'BLOCKCHAIN' | 'AI' | 'FINANCE';
   level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE';
   message: string;
 }

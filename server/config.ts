@@ -36,9 +36,11 @@ export const blockchainConfig = {
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
     openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
     googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxmke0-Fu1FuY0_W6dliNvjm7eH9tOlW2tfOzxJgkEZr2uLY7FIPZ4iDKmn1ZSoV8vo/exec',
-    batchTradeThresholdMB: parseFloat(process.env.BATCH_TRADE_THRESHOLD_MB || '500'), // 500 MB eşiği
+    batchTradeThresholdMB: parseFloat(process.env.BATCH_TRADE_THRESHOLD_MB || '500'),
     dailyGoalUSD: parseFloat(process.env.DAILY_GOAL_USD || '3000'),
-    marketOrderTicker: process.env.MARKET_ORDER_TICKER || 'BTC/USDT'
+    // marketOrderTicker: process.env.MARKET_ORDER_TICKER || 'BTC/USDT', // Binance bağımlılığı kaldırıldı, bu satır artık gerekli değil
+    liquidityPoolAddress: process.env.LIQUIDITY_POOL_ADDRESS || '0x0000000000000000000000000000000000000000',
+    greenTokenAddress: process.env.GREEN_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000'
 };
 
 export const dbConfig = {

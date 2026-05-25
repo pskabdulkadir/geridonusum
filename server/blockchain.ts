@@ -8,7 +8,6 @@
 
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
-import { blockchainConfig } from './config.ts';
 
 export class BlockchainRouter {
   public rpcUrl: string;
@@ -35,7 +34,7 @@ export class BlockchainRouter {
     let pkey = options.privateKey || blockchainConfig.privateKey;
     let contract = options.contractAddress || blockchainConfig.contractAddress;
 
-    if (pkey && !pkey.startsWith('0x')) {
+    if (pkey && !pkey.startsWith('0x')) { // PRIVATE_KEY'in 0x ile başladığından emin ol
       pkey = '0x' + pkey;
     }
 
@@ -88,7 +87,7 @@ export class BlockchainRouter {
     }
   }
 
-  private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {
+  private emitLog(module: 'SYSTEM' | 'CRAWLER' | 'OPTIMIZER' | 'BLOCKCHAIN' | 'AI' | 'FINANCE', level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE', msg: string) {
     // GÜVENLİK FİLTRESİ: Loglarda asla private key geçmemeli
     if (this.privateKey && msg.includes(this.privateKey)) {
       msg = msg.replace(this.privateKey, "***GIZLI_ANAHTAR***");
@@ -213,7 +212,7 @@ export class BlockchainRouter {
   /**
    * Dispatches immutable parameters onto the target L2/Core blockchain network.
    */
-  public async triggerBorsaSwap(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
+  public async submitGreenCreditProof(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
     this.emitLog('BLOCKCHAIN', 'INFO', `Blokzinciri ağ geçidi hazırlanıyor...`);
 
     let lastError: any = null;
@@ -328,67 +327,4 @@ export class BlockchainRouter {
     };
   }
 
-  /**
-   * Binance Smart Chain (BSC) ağı üzerinde gerçek BNB transferi gerçekleştirir.
-   * Eğer PRIVATE_KEY tanımlı değilse veya geçersizse otomatik olarak simüle edilmiş test kaydına geçer.
-   */
-  public async executeBscPayout(toAddress: string, bnbAmountStr: string = "0.0005"): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `Binance Smart Chain (BSC) üzerinden otonom gelir transferi başlatılıyor...`);
-
-    // Alıcı adresi doğrulaması
-    if (!toAddress || !ethers.utils.isAddress(toAddress)) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', `Geçersiz alıcı cüzdan adresi: ${toAddress}`);
-      return { success: false, txHash: '', simulated: false, error: 'Invalid destination address' };
-    }
-
-    // Özel anahtarın mevcut ve geçerli olduğunu kontrol et
-    const pkey = this.privateKey;
-    const bscRpcEndpoints = ['https://bsc-dataseed.binance.org/', 'https://rpc.ankr.com/bsc', 'https://binance.llamarpc.com'];
-    let payoutError: any = null;
-
-    for (const bscRpc of bscRpcEndpoints) {
-      try {
-        this.emitLog('BLOCKCHAIN', 'INFO', `BSC ağına bağlanılıyor: ${bscRpc}`);
-
-        const provider = new ethers.providers.JsonRpcProvider({ url: bscRpc, timeout: 10000 });
-        const wallet = new ethers.Wallet(pkey, provider);
-        if (!pkey || pkey.includes('YOUR_PRIVATE_KEY')) {
-          const errMsg = "HATA: Gerçek gelir transferi için geçerli bir PRIVATE_KEY tanımlanmalıdır.";
-          this.emitLog('BLOCKCHAIN', 'ERROR', errMsg);
-          return { success: false, txHash: '', simulated: false, error: errMsg };
-        }
-
-        const balance = await provider.getBalance(wallet.address);
-        const amountWei = ethers.utils.parseEther(bnbAmountStr);
-
-        // Bakiye ve gas için küçük bir marj bırak (safety buffer)
-        if (balance.lt(amountWei.add(ethers.utils.parseEther("0.0005")))) {
-          throw new Error("insufficient funds");
-        }
-
-        this.emitLog('BLOCKCHAIN', 'INFO', `${toAddress} cüzdanına ${bnbAmountStr} BNB gönderiliyor...`);
-        
-        const tx = await wallet.sendTransaction({
-          to: toAddress,
-          value: amountWei,
-          gasLimit: 21000
-        });
-
-        const receipt = await tx.wait();
-        this.emitLog('BLOCKCHAIN', 'SUCCESS', `Gelir gerçek BSC ağı üzerinden iletildi! Hash: ${tx.hash}`);
-
-        return {
-          success: true,
-          txHash: tx.hash,
-          simulated: false
-        };
-      } catch (err: any) {
-        payoutError = err;
-        this.emitLog('BLOCKCHAIN', 'WARNING', `BSC RPC hatası (${bscRpc}): ${this.parseBlockchainError(err)}`);
-        continue;
-      }
-    }
-
-    return { success: false, txHash: '', simulated: false, error: this.parseBlockchainError(payoutError) };
-  }
 }
