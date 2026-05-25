@@ -30,6 +30,14 @@ export interface ReadyToSellItem {
   valuationWei?: string; // Kontrat için hassas fiyat verisi (BigNumber string olarak)
 }
 
+export interface SalesLedgerEntry {
+  assetId: string;
+  amountUsdt: number;
+  status: 'PENDING_PAYMENT' | 'PAID' | 'EXPIRED';
+  ticker: string;
+  timestamp: string;
+}
+
 export interface CoreStats {
   pagesProcessed: number;
   originalSizeTotal: number;

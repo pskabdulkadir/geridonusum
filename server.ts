@@ -38,6 +38,10 @@ export const mainCrawler = new WebCrawler({
   targetLimit: 999999
 });
 
+// --- KONFİGÜRASYON ---
+const MY_BINANCE_UID = "1247690103"; // Binance Kimliğin
+const KULLANICI_ADI = "Kullanıcı-a5a08";
+
 // 1. HEDEF BELİRLEME (Seed URLs)
 const crawlerSeeds = [
   "https://wikipedia.org",
@@ -73,7 +77,8 @@ const serverState = {
   autonomousMode: false,
   commitThreshold: 10,
   batchVolumeAccumulatedKB: 0, // Toplu işlem için biriken hacim
-  aktifBakiyeUSDT: 0, // Simüle edilen aktif bakiye
+  lastKnownUsdtBalance: 0, // Binance üzerindeki son kontrol edilen bakiye
+  unpaidEarningsUsdt: 0, // Henüz tahsil edilmemiş toplam alacak
 };
 
 // 1. ADIM: Ticaret Motorunun "Karar Mekanizması"
@@ -82,8 +87,21 @@ const kararMotoru = {
     
     // Bakiyeyi kontrol et (API entegrasyonu hazırlığı)
     async bakiyeKontrol() {
-        // İleride buraya Binance/Ocean API: await exchange.fetchBalance() gelecek
-        return serverState.aktifBakiyeUSDT;
+        try {
+            const balance = await exchange.fetchBalance();
+            const currentUsdt = balance.total['USDT'] || 0;
+            
+            // Yeni ödeme gelmiş mi kontrol et
+            if (currentUsdt > serverState.lastKnownUsdtBalance) {
+                const diff = currentUsdt - serverState.lastKnownUsdtBalance;
+                pushLog('MARKET', 'SUCCESS', `[SATIŞ_ONAYLANDI] Binance cüzdanına ${diff.toFixed(2)} USDT giriş saptandı!`);
+                serverState.lastKnownUsdtBalance = currentUsdt;
+            }
+            
+            return currentUsdt;
+        } catch (err: any) {
+            return serverState.lastKnownUsdtBalance;
+        }
     },
 
     // Karar ver: Satış zamanı geldi mi?
@@ -107,18 +125,47 @@ const exchange = new ccxt.binance({
     enableRateLimit: true,
 });
 
-async function ticaretMotoru(sembol: string = 'BTC/USDT', miktar: number) {
+// --- OTONOM VERİ SATIŞ MOTORU (LEDGER KAYIT) ---
+async function ticaretMotoru(assetId: string, deger: number) {
     try {
-        pushLog('MARKET', 'INFO', `[TİCARET] İşlem başlatılıyor: ${sembol}, Miktar: ${miktar}`);
+        // Artık Binance'e "Satış Emri" göndermiyoruz, çünkü veri satışı zaten 
+        // Blok Zinciri (EIP-712) üzerinde mühürlendi.
+        // Tek yapmamız gereken bu "satışa hazır" durumu takip etmek.
+        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] Veri arzı gerçekleşti. ID: ${assetId} | Değer: ${deger} USDT.`);
+        pushLog('MARKET', 'INFO', `[ÖDEME_TAKİBİ] Cüzdan adresi izleniyor, ödeme bekleniyor...`);
         
-        // Piyasa fiyatından satış emri gönder
-        const order = await exchange.createMarketSellOrder(sembol, miktar);
+        // MongoDB ve Google Sheets'e not ediyoruz
+        await logToSalesLedger(assetId, deger); 
         
-        pushLog('MARKET', 'SUCCESS', `[TİCARET] BAŞARILI: Satış gerçekleşti. Order ID: ${order.id}`);
-        return order;
+        serverState.unpaidEarningsUsdt += deger;
+        pushLog('MARKET', 'SUCCESS', `[LEJDER] Toplam alacak: ${serverState.unpaidEarningsUsdt.toFixed(4)} USDT.`);
     } catch (error: any) {
-        pushLog('MARKET', 'ERROR', `[TİCARET] HATA: İşlem yapılamadı. Detay: ${error.message}`);
+        pushLog('MARKET', 'ERROR', `[SATIŞ_KAYDI_HATASI] ${error.message}`);
     }
+}
+
+/**
+ * Gelir Defteri Kayıt Yardımcısı
+ */
+async function logToSalesLedger(id: string, price: number) {
+    // Alıcılar için ödeme talimatı
+    const paymentInstructions = `ÖDEME İÇİN: Binance üzerinden UID: ${MY_BINANCE_UID} (Hesap: ${KULLANICI_ADI})`;
+    
+    // Google Sheets'e gönderilecek payload
+    const payload = {
+        type: "CASH_FLOW",
+        ticker: "VERI_SATISI",
+        assetId: id,
+        amount: "1", // 1 paket veri
+        price: price.toFixed(4),
+        paymentInfo: paymentInstructions,
+        timestamp: new Date().toISOString()
+    };
+
+    // Tüm piyasalara yayınla (Google Sheets / Dashboard)
+    await broadcastToAllMarkets(payload);
+
+    pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: ${id} | Arz Edilen Değer: ${price.toFixed(4)} USDT. ${paymentInstructions}`);
 }
 // --- TİCARET MOTORU BİTİŞİ ---
 
@@ -199,7 +246,11 @@ function pushLog(
   // Broadcast to all SSE connected terminals
   const sseData = `data: ${JSON.stringify(logEntry)}\n\n`;
   for (const client of clients) {
-    client.write(sseData);
+    try {
+      client.write(sseData);
+    } catch (e) {
+      clients.delete(client);
+    }
   }
 }
 
@@ -307,28 +358,13 @@ async function broadcastToAllMarkets(item: any) {
                 : item;
             }
 
-            if (channel.name === "GoogleSheets") {
-                // 3. Adım: Botun "CORS" Engelini Aşmalı (Fetch mode: no-cors)
-                await fetch(channel.url, {
-                    method: 'POST',
-                    mode: 'no-cors', // BU SATIR HAYAT KURTARIR
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            } else {
-                await axios.post(channel.url, payload, { timeout: 10000 });
-            }
+            // Render/Node ortamında axios kullanımı daha stabildir
+            await axios.post(channel.url, payload, { timeout: 10000 });
 
             if (channel.name === "GoogleSheets") {
                 const msg = item.type === "CASH_FLOW" ? "Nakit akışı raporu işlendi." : "Veri aktarım sinyali gönderildi.";
                 pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${msg} (Google Sheets).`);
-                // Sadece gerçek varlık ihracatında ticaret tetikle (Raporlarda tetikleme)
-                if (item.type !== "CASH_FLOW") await ticaretMotoru('BTC/USDT', 0.001);
-            } else {
-                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
-                await ticaretMotoru('BTC/USDT', 0.001);
             }
-            
         } catch (err: any) {
             pushLog('MARKET', 'ERROR', `[EXPORT_FAILED] ${channel.name}: ${err.message}`);
         }
@@ -345,22 +381,12 @@ async function executeBatchTrade() {
   if (kararMotoru.kararVer(serverState.batchVolumeAccumulatedKB)) {
       pushLog('MARKET', 'SUCCESS', `[EXECUTING_TRADE] Borsa emirleri otonom olarak iletiliyor...`);
       
-      const simulatedPrice = 65000 + Math.random() * 1000; 
-      const tradeAmount = 0.046; // $3000 hedefine yönelik miktar
+      const totalValue = (serverState.batchVolumeAccumulatedKB / 1024) * 0.00045; // Değerleme formülü
       
-      // 1. Google Sheets'e "Nakit Akışı" raporu geç
-      await broadcastToAllMarkets({
-        type: "CASH_FLOW",
-        ticker: blockchainConfig.marketOrderTicker,
-        amount: tradeAmount,
-        price: simulatedPrice.toFixed(2)
-      });
+      // Gerçek ticaret motorunu çağır (Ledger kaydı yapar)
+      await ticaretMotoru("VERI_SATISI", totalValue); // Sembol yerine genel bir etiket kullanıyoruz
 
-      // 2. Finansal durumu güncelle
-      serverState.aktifBakiyeUSDT += (tradeAmount * simulatedPrice);
       serverState.batchVolumeAccumulatedKB = 0; // Hacmi sıfırla
-      
-      pushLog('MARKET', 'SUCCESS', `[TRADE_COMPLETED] Nakit akışı Google Sheets'e mühürlendi.`);
   }
 }
 
@@ -373,6 +399,9 @@ async function startAutomatedTrading() {
     setTimeout(startAutomatedTrading, 5000);
     return;
   }
+
+  // Finansal Modül Kontrolü: Binance cüzdanına yeni giriş var mı?
+  await kararMotoru.bakiyeKontrol();
 
   // Finansal Modül Kontrolü
   await executeBatchTrade();
