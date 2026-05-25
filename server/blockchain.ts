@@ -72,37 +72,34 @@ export class BlockchainRouter {
   }
 
   public async validateOnChainStatus() { // Metodu public yaptık
-    let attempts = 0;
-    const maxAttempts = 3;
+    this.emitLog('BLOCKCHAIN', 'INFO', `Ağ geçitleri taranıyor: ${this.rpcEndpoints.length} düğüm aktif.`);
 
-    while (attempts < maxAttempts) {
+    for (let i = 0; i < this.rpcEndpoints.length; i++) {
+      const currentRpc = this.rpcEndpoints[i];
       try {
         const provider = new ethers.providers.JsonRpcProvider({
-          url: this.rpcUrl,
+          url: currentRpc,
           skipFetchSetup: true
         });
 
-        // Force network detection
-        await provider.getNetwork();
+        // 5 saniye içinde ağ yanıtı alamazsak bir sonrakine geç
+        await Promise.race([
+          provider.getNetwork(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
+
+        this.rpcUrl = currentRpc; // Çalışan RPC'yi ana kanal yap
         await provider.getNetwork();
 
-        // Eğer kontrat adresi sıfır değilse, deploy durumunu kontrol et
-        if (this.contractAddress && this.contractAddress !== ethers.constants.AddressZero) {
-          const code = await provider.getCode(this.contractAddress);
-          if (code === "0x") {
-            this.emitLog('BLOCKCHAIN', 'ERROR', `KRITIK: ${this.contractAddress} adresinde kontrat bulunamadı!`);
-          } else {
-            this.emitLog('BLOCKCHAIN', 'SUCCESS', `Sözleşme doğrulandı: ${this.contractAddress}`);
-          }
-        }
-        return; // Başarılıysa döngüden çık
-      } catch (err: any) {
-        attempts++;
-        this.emitLog('BLOCKCHAIN', 'WARNING', `Ağ bağlantı denemesi ${attempts}/${maxAttempts} başarısız: ${err.message}`);
-        if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 5000));
+        this.emitLog('BLOCKCHAIN', 'SUCCESS', `Ağ bağlantısı kuruldu: ${currentRpc}`);
+        return;
+      } catch (err) {
+        this.emitLog('BLOCKCHAIN', 'WARNING', `Düğüm hatası [${i + 1}/${this.rpcEndpoints.length}]: ${currentRpc}`);
+        continue;
       }
     }
-    this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: Ağ algılanamadı (noNetwork). RPC ayarlarını kontrol edin.");
+
+    this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: Mevcut tüm RPC düğümleri kapalı! Lütfen Alchemy API anahtarınızı .env dosyasına ekleyin.");
   }
 
   public registerLogger(cb: typeof this.logCallback) {
