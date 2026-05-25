@@ -48,10 +48,9 @@ export class BlockchainRouter {
 
     this.rpcEndpoints = Array.from(new Set([
       rpc,
-      'https://polygon-rpc.com',
+      'https://polygon.llamarpc.com',
       'https://polygon-mainnet.g.alchemy.com/v2/G-qA0bZx-DU57eXe83q8e',
       'https://rpc.ankr.com/polygon',
-      'https://polygon.llamarpc.com',
       'https://1rpc.io/matic',
       'https://polygon-mainnet.public.blastapi.io'
     ].filter(Boolean)));

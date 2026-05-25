@@ -28,7 +28,7 @@ import { blockchainConfig, dbConfig } from "./server/config.ts";
 // --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
 const web3Config = {
     payoutWallet: process.env.PAYOUT_WALLET || process.env.CHANNEL_ROUTING_WALLET || "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
-    rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || "https://polygon-rpc.com",
+    rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || "https://polygon.llamarpc.com",
     contractAddress: process.env.SMART_GATE_CONTRACT_ADDRESS || process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
 };
 
