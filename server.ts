@@ -42,9 +42,9 @@ export const mainCrawler = new WebCrawler({
 // --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
 // Binance ve ccxt gibi merkezi borsa kalıntıları tamamen imha edildi.
 const web3Config = {
-    payoutWallet: process.env.CHANNEL_ROUTING_WALLET || process.env.PAYOUT_WALLET || blockchainConfig.payoutWallet || "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
+    payoutWallet: process.env.CHANNEL_ROUTING_WALLET || "0x89205abAE846560fdEB791C1fEe17482D2Ec739D",
     rpcUrl: process.env.RPC_URL || "https://polygon-rpc.com",
-    contractAddress: process.env.CONTRACT_ADDRESS || blockchainConfig.contractAddress
+    contractAddress: process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
 };
 
 // 1. HEDEF BELİRLEME (Seed URLs)
@@ -128,7 +128,7 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
 async function broadcastToGreenFinanceNetwork(proof: any) {
   try {
     // Ocean Market Contract Address (Polygon ağı için - .env üzerinden de yönetilebilir)
-    const OCEAN_CONTRACT = process.env.OCEAN_MARKET_CONTRACT || "0x8967b... (Ocean Market tarafından size verilen adres)";
+    const OCEAN_CONTRACT = web3Config.contractAddress;
     
     pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] Veri ${proof.id} Ocean Protocol Smart Contract'ına gönderiliyor...`);
 
