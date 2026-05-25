@@ -218,7 +218,7 @@ export class BlockchainRouter {
       // Veri (Value)
       const value = {
         id: dataAssetId,
-        accessFee: ethers.utils.parseUnits((accessPrice || 0).toFixed(18), 18), // Fiyatı Wei'ye çevir (Safety check eklendi)
+        accessFee: ethers.utils.parseUnits(parseFloat(String(accessPrice || 0)).toFixed(18), 18), // Sayı tipini garantiye al
         publisher: wallet.address // seller yerine publisher
       };
 
@@ -285,7 +285,7 @@ export class BlockchainRouter {
         if (isZeroContract) {
           this.emitLog('BLOCKCHAIN', 'INFO', `Akıllı kontrat adresi belirtilmedi. Veri analitiği kanıtı doğrudan Polygon üzerinde mühürleniyor (Memo mod)...`);
 
-          const memoMessage = `DATA_INSIGHT_PROOF:${proofHash}:${co2AnalysisGrams.toFixed(4)}_CO2_g_ANALYSIS`;
+          const memoMessage = `DATA_INSIGHT_PROOF:${proofHash}:${(co2AnalysisGrams || 0).toFixed(4)}_CO2_g_ANALYSIS`;
           const memoBytes = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(memoMessage));
 
           const tx = await wallet.sendTransaction({
@@ -309,7 +309,7 @@ export class BlockchainRouter {
           // Contract execution
           const contract = new ethers.Contract(this.contractAddress, this.contractAbi, wallet);
           // Analiz değerini kontratın beklediği birime (18 decimal) çevir
-          const amountWei = ethers.utils.parseUnits(co2AnalysisGrams.toFixed(18), 18);
+          const amountWei = ethers.utils.parseUnits((co2AnalysisGrams || 0).toFixed(18), 18);
 
           this.emitLog('BLOCKCHAIN', 'INFO', `Veri analitiği kanıt işlemi akıllı kontrat üzerinde başlatılıyor...`);
           

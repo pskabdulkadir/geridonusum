@@ -44,7 +44,7 @@ export default function App() {
     optimizedSizeTotal: 0,
     totalKiloBytesSaved: 0,
     totalCo2SavedGrams: 0,
-    blockchainProofsMinted: 0,
+    dataAssetRegistrations: 0,
     visitedUrls: [],
     transactions: [],
     isCrawling: false,
@@ -253,7 +253,7 @@ export default function App() {
   // Gerçek bir alıcının karbon veri paketini satın almasını tetikle (Manuel Payout)
   const handleExecutePayout = async (itemId: string) => {
     const item = stats.readyToSell.find(i => i.id === itemId);
-    if (!item || !item.signature) {
+    if (!item || !item.accessVoucherSignature) {
       alert("Varlık imzası (Voucher) bulunamadı. Lütfen otonom motorun imzalamasını bekleyin.");
       return;
     }
@@ -287,7 +287,7 @@ export default function App() {
       const signer = provider.getSigner();
       
       // Alıcı gas ücretini ödeyerek kontratı tetikler
-      console.log("Buyer is executing claim for signature:", item.signature);
+      console.log("Buyer is executing claim for signature:", item.accessVoucherSignature);
       
       // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
       const contractAddress = stats.contractAddress; 
@@ -298,10 +298,10 @@ export default function App() {
       ];
       
       const contract = new ethers.Contract(contractAddress, contractAbi, signer);
-      const priceWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
+      const priceWei = ethers.utils.parseUnits((item.accessPriceUSD || 0).toFixed(18), 18);
 
       // Gas-on-Purchase: İşlemi alıcı (MetaMask sahibi) başlatır ve gas'ı öder.
-      const tx = await contract.buyAsset(item.id, priceWei, item.signature, {
+      const tx = await contract.buyAsset(item.id, priceWei, item.accessVoucherSignature, {
         value: priceWei // Alıcı parayı kontrata gönderir, kontrat sana iletir
       });
 

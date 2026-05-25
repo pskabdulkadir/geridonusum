@@ -22,6 +22,14 @@ export class MarketplaceManager {
   }
 
   /**
+   * [LEGACY_BRIDGE] prepareAssetForSale
+   * Eski terminolojiyle yapılan çağrıları yeni meşru yapıya yönlendirir.
+   */
+  public async prepareAssetForSale(dataAssetId: string, accessFeeInUsdt: number) {
+    return this.prepareDataAssetForAccess(dataAssetId, accessFeeInUsdt);
+  }
+
+  /**
    * PROTOKOL_1: prepareAssetForSale (Gasless)
    * Veriyi satışa hazırlar ve alıcının işlemi başlatacağı yapıya sokar.
    */

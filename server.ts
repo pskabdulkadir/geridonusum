@@ -182,12 +182,15 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     
     pushLog('FINANCE', 'INFO', `[ASSET_PUBLISH] Veri ${proof.id} ticari varlığa dönüştürülüyor...`);
     
-    // --- TIP GÜVENLİĞİ VE TANIMLAMA (HATA ONARIMI) ---
-    const safeValue = parseFloat(proof.value || 0).toFixed(6);
+    // --- PAKETLEME HATTI ONARIMI ---
+    // createdDataInsight tanımlı değil hatasını önlemek için nesneyi burada oluşturuyoruz
     const createdDataInsight = {
         id: proof.id,
-        timestamp: proof.timestamp || Date.now()
+        timestamp: proof.timestamp || Date.now(),
+        value: proof.value
     };
+
+    const safeValue = parseFloat(proof.value || 0).toFixed(6);
 
     const dateStr = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }).replace(/ /g, '_').toLowerCase();
     const assetName = `günlük_karbon_verisi_${dateStr}_${createdDataInsight.id}`;
@@ -357,16 +360,16 @@ const ReadyToSellSchema = new mongoose.Schema({
   co2SavingsGrams: Number,
   extractedKeywords: [String],
   reportSummary: String,
-  marketPriceUSD: Number,
+  accessPriceUSD: Number,
   isSold: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
-  signature: String,
-  sellerAddress: String,
-  valuationWei: String // Kontrat için hassas fiyat verisi
+  accessVoucherSignature: String,
+  publisherAddress: String,
+  accessPriceWei: String // Kontrat için hassas fiyat verisi
 });
 
 TransactionSchema.index({ timestamp: -1 });
-ReadyToSellSchema.index({ isSold: 1, signature: 1, timestamp: 1 });
+ReadyToSellSchema.index({ isSold: 1, accessVoucherSignature: 1, timestamp: 1 });
 ReadyToSellSchema.index({ id: 1 }, { unique: true });
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
@@ -613,7 +616,7 @@ async function startAutomatedTrading() {
       const opportunity = await checkMarketOpportunity();
       if (opportunity.isProfitable && opportunity.item) {
         pushLog('EXECUTOR', 'ANALYZE', `[BATCH_COMMIT] ${opportunity.item.id} otonom işleme alınıyor.`);
-        await broadcastToNetwork(opportunity.item.id);
+        await signDataAssetAccessVoucher(opportunity.item.id);
       }
     } else {
       if (pendingCount > 0) {
@@ -674,10 +677,12 @@ async function runRecyclingMining() {
         co2SavingsGrams: metric.co2SavingsGrams,
         extractedKeywords: ["recyclable", "dark-data", "carbon-offset"],
         reportSummary: `STRÜKTÜREL GERİ DÖNÜŞÜM: ${url} düğümü başarıyla optimize edildi.`,
-        marketPriceUSD: valuation,
+        accessPriceUSD: valuation,
         isSold: false,
         timestamp: new Date().toISOString(),
-        valuationWei: valuationWei
+        accessPriceWei: valuationWei,
+        licenseType: "Creative Commons Attribution",
+        sourceAttribution: url
       };
 
       if (mongoose.connection.readyState === 1) {
@@ -685,8 +690,8 @@ async function runRecyclingMining() {
         pushLog('SYSTEM', 'SUCCESS', `[DB_COMMIT] Varlık Atlas Cluster'a mühürlendi: ${savedDoc.id}`);
 
         // --- PAZAR YERİ LİSTELEME (OFF-CHAIN / GASLESS) ---
-        const result = await mainMarketplace.prepareAssetForSale(generatedId, valuation);
-        pushLog('MARKET', 'SUCCESS', `[ASSET_READY] Varlık satışa hazırlandı. Durum: ${result.status}`);
+        const result = await mainMarketplace.prepareDataAssetForAccess(generatedId, valuation);
+        pushLog('MARKET', 'SUCCESS', `[DATA_ASSET_READY] Veri analitiği raporu erişime hazırlandı. Durum: ${result.status}`);
 
         serverState.pagesProcessed++;
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
@@ -694,7 +699,7 @@ async function runRecyclingMining() {
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
         pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
 
-        await broadcastToNetwork(generatedId);
+        await signDataAssetAccessVoucher(generatedId);
 
         await executeBatchTrade();
       }
@@ -728,7 +733,7 @@ app.post("/api/market/publish-all", async (req, res) => {
     pushLog('MARKET', 'ANALYZE', `[BATCH_PUSH] ${pendingItems.length} varlık için toplu onay başlatıldı.`);
     
     for (const item of pendingItems) {
-      await broadcastToNetwork(item.id);
+      await signDataAssetAccessVoucher(item.id);
     }
     
     res.json({ success: true, count: pendingItems.length });
@@ -779,7 +784,7 @@ app.get("/api/stats", async (req, res) => {
       // ÜRETİM MODU: Tüm veritabanındaki toplam satılan paket bedelini hesapla
       const earningsData = await ReadyToSellModel.aggregate([
         { $match: { isSold: true } },
-        { $group: { _id: null, total: { $sum: "$marketPriceUSD" } } }
+        { $group: { _id: null, total: { $sum: "$accessPriceUSD" } } }
       ]);
       totalEarnings = earningsData[0]?.total || 0;
       blockchainProofsMinted = transactions.length;
@@ -793,7 +798,7 @@ app.get("/api/stats", async (req, res) => {
       optimizedSizeTotal: serverState.optimizedSizeTotal,
       totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      blockchainProofsMinted: blockchainProofsMinted,
+      dataAssetRegistrations: blockchainProofsMinted,
       transactions: transactions,
       visitedUrls: Array.from(serverState.visitedUrls),
       totalEarnings: totalEarnings,
