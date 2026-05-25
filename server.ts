@@ -255,8 +255,8 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
         pushLog('FINANCE', 'SUCCESS', `[METADATA_INDEXED] Varlık Aquarius pazar dizinine mühürlendi.`);
 
         // 2. ADIM: Provider'a bildir (Servisi başlat)
-        const providerUrl = "https://provider.oceanprotocol.com/api/services/initialize";
-        pushLog('FINANCE', 'INFO', `[PROVIDER_MINTING] Datatoken ve erişim katmanı oluşturuluyor...`);
+        const providerUrl = `${currentProvider.replace(/\/$/, '')}/api/v1/services/initialize`;
+        pushLog('FINANCE', 'INFO', `[PROVIDER_INITIALIZING] Erişim katmanı oluşturuluyor: ${currentProvider}`);
         response = await axios.post(providerUrl, {
           document: ddoPayload, // Tam DDO objesi
           serviceId: ddoPayload.services[0].id, // DDO içindeki ilk servisin ID'si
