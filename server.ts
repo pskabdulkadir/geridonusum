@@ -18,11 +18,13 @@ import * as dotenv from "dotenv";
 // Load environment variables
 dotenv.config();
 
+// Load config first
+import { blockchainConfig, dbConfig } from "./server/config.ts";
+
 // Modules
 import { BlockchainRouter } from "./server/blockchain.ts";
 import { DataOptimizer } from "./server/optimizer.ts";
 import { DataAnalyzer } from "./server/analyzer.ts";
-import { blockchainConfig, dbConfig } from "./server/config.ts";
 import { LogEntry, CoreStats, TransactionRecord, ReadyToSellItem } from "./src/types.ts";
 import { WebCrawler } from "./server/crawler.ts";
 import { MarketplaceManager } from "./server/marketplace.ts";
