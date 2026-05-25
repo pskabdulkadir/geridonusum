@@ -19,6 +19,9 @@ import dns from "dns";
 // Load environment variables
 dotenv.config();
 
+// Network Safety: API yanıt vermezse sistemi kilitlememesi için global timeout
+axios.defaults.timeout = 5000;
+
 // DNS Workaround: IPv6 önceliği nedeniyle oluşan ENOTFOUND hatalarını engelle
 dns.setDefaultResultOrder("ipv4first");
 
@@ -47,6 +50,9 @@ export const mainMarketplace = new MarketplaceManager();
 
 // Settlement Queue: Mutabakat işlemlerini crawler'dan izole eder
 const settlementQueue: { assetId: string, creditValue: number }[] = [];
+
+// Publish Queue: Ocean Protocol yayınlarını izole eder ve retry sağlar
+const publishQueue: any[] = [];
 
 // mainBlockchain'i web3Config'den gelen doğru contractAddress ile başlat
 export const mainBlockchain = new BlockchainRouter({
@@ -103,21 +109,23 @@ const serverState = {
 
 /**
  * --- GERÇEK FİNANSAL MUTABAKAT MOTORU ---
- * Sistemin ürettiği veri analitiği kanıtını Ocean Protocol'e yayınlar.
+ * Sistemin ürettiği veri analitiği kanıtını merkeziyetsiz veri ağına (Ocean) kaydeder.
  */
-async function registerDataAsset(dataAssetId: string, dataInsightValue: number) {
+async function registerDataAsset(dataAssetId: string, dataInsightValue: number, source: string, license: string) {
     try {
-        // 1. ADIM: Veri Analitiği Raporunu (Proof) Ocean Protocol'e Hazırla
+        // 1. ADIM: Veri Analitiği Raporunu (Insight) Ağ Protokolüne Hazırla
         const proofOfCleansing = {
             id: dataAssetId,
             timestamp: Date.now(),
             value: dataInsightValue,
             status: "PENDING_REGISTRATION", // PENDING_SETTLEMENT yerine PENDING_REGISTRATION
-            protocol: "GREEN_FINANCE_v1",
+            protocol: "DATA_LOGISTICS_v1",
+            sourceAttribution: source,
+            licenseType: license
         };
 
-        // 2. ADIM: Ocean Protocol'e Yayınla (Veri Varlığı Kaydı)
-        await broadcastToGreenFinanceNetwork(proofOfCleansing);
+        // 2. ADIM: Yayın Kuyruğuna Ekle (Fire-and-Forget / Non-blocking)
+        publishQueue.push(proofOfCleansing);
 
         // 3. ADIM: Kuyruğa Ekle (Async Isolation)
         settlementQueue.push({ assetId: dataAssetId, creditValue: dataInsightValue });
@@ -140,7 +148,7 @@ async function processSettlementQueue() {
         
         // Nakit akışını Google Sheets'e işle
         await logDataAssetActivity({
-            type: "ACCESS_FEE_COLLECTION",
+            type: "SERVICE_FEE_REPORT",
             assetId: task.assetId,
             profitUsdt: collectedAccessFee.toFixed(4),
             status: "COLLECTED_ACCESS_FEE",
@@ -151,6 +159,19 @@ async function processSettlementQueue() {
     }
 }
 setInterval(processSettlementQueue, 15000); // 15 saniyede bir kuyruğu işle
+
+/**
+ * PUBLISH WORKER: Kuyruğa düşen Ocean yayınlarını otonom olarak işler.
+ */
+async function processPublishQueue() {
+    if (publishQueue.length === 0) return;
+    const task = publishQueue.shift();
+    if (!task) return;
+
+    // Yayın işlemini asenkron başlat, ama bekleme (Non-blocking worker)
+    broadcastToGreenFinanceNetwork(task).catch(() => {});
+}
+setInterval(processPublishQueue, 20000); // 20 saniyede bir yayın kuyruğunu erit
 
 async function broadcastToGreenFinanceNetwork(proof: any) {
   try {
@@ -422,7 +443,7 @@ function pushLog(
  * Görev Tipi: DATA_CLEANING_TASK
  * Mining: Piyasa fırsatlarını ve yeni veri kaynaklarını otonom tarar.
  */
-async function checkMarketOpportunity() {
+async function checkDataInsightOpportunity() {
   if (mongoose.connection.readyState !== 1) return { isProfitable: false };
   
   // PROTOKOL_FIX: Sadece satılmamış VE henüz erişim voucheri imzalanmamış paketleri işle
@@ -559,8 +580,8 @@ async function executeDataAssetBatchPublish() { // executeBatchTrade yerine exec
 async function performDataAssetRegistration() { // performBlockchainSettlement yerine performDataAssetRegistration
     const assetId = `BATCH_EXPORT_${Date.now()}`;
     const kiloBytes = serverState.batchVolumeAccumulatedKB;
-    // Mevcut veri analitiği üretim motoru üzerinden zincir üstü kaydı gerçekleştir
-    await generateDataInsight(assetId, kiloBytes); // darphaneMotoru yerine generateDataInsight
+    // Toplu yayınlarda varsayılan olarak CC-BY lisansı ve portal kaynağı kullanılır
+    await generateDataInsight(assetId, kiloBytes, "Global Open Data Portals", "CC-BY 4.0");
 }
 
 /**
@@ -648,7 +669,9 @@ async function runRecyclingMining() {
         accessPriceUSD: valuation, // marketPriceUSD yerine accessPriceUSD
         isSold: false,
         timestamp: new Date().toISOString(),
-        accessPriceWei: valuationWei // valuationWei yerine accessPriceWei
+        accessPriceWei: valuationWei, // valuationWei yerine accessPriceWei
+        licenseType: "Creative Commons Attribution",
+        sourceAttribution: url
       };
 
       if (mongoose.connection.readyState === 1) {

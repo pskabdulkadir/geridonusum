@@ -25,7 +25,7 @@ export interface ReadyToSellItem {
   accessPriceUSD: number; // marketPriceUSD yerine accessPriceUSD
   isSold: boolean;
   timestamp: string;
-  licenseType: string; // Örn: "CC-BY 4.0", "Public Domain", "ODC-BY"
+  licenseType: string; // Örn: "CC-BY 4.0", "Public Domain"
   sourceAttribution: string; // Orijinal veri portalı adı
   accessVoucherSignature?: string; // Veri erişim voucheri imzası
   publisherAddress?: string; // Varlığı yayınlayan cüzdan adresi
@@ -48,7 +48,7 @@ export interface CoreStats {
   totalCo2SavedGrams: number;
   dataAssetRegistrations: number; // blockchainProofsMinted yerine dataAssetRegistrations
   visitedUrls: string[];
-  totalEarnings: number;
+  totalServiceFeesCollected: number; // totalEarnings yerine
   transactions: TransactionRecord[];
   isCrawling: boolean;
   currentCrawlingUrl: string;

@@ -86,7 +86,8 @@ export class BlockchainRouter {
         await provider.ready;
         await provider.getNetwork();
 
-        if (this.contractAddress !== ethers.constants.AddressZero) {
+        // Eğer kontrat adresi sıfır değilse, deploy durumunu kontrol et
+        if (this.contractAddress && this.contractAddress !== ethers.constants.AddressZero) {
           const code = await provider.getCode(this.contractAddress);
           if (code === "0x") {
             this.emitLog('BLOCKCHAIN', 'ERROR', `KRITIK: ${this.contractAddress} adresinde kontrat bulunamadı!`);
