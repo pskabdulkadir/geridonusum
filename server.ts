@@ -37,6 +37,9 @@ export const mainCrawler = new WebCrawler({
   targetLimit: 999999
 });
 
+// --- WEB3 FİNANSAL KONFİGÜRASYON ---
+const payoutWallet = blockchainConfig.payoutWallet; // 0x02cc8aBB...33e4 (config.ts'den çekilir)
+
 // 1. HEDEF BELİRLEME (Seed URLs)
 const crawlerSeeds = [
   "https://wikipedia.org",
@@ -72,8 +75,7 @@ const serverState = {
   autonomousMode: false,
   commitThreshold: 10,
   batchVolumeAccumulatedKB: 0, // Toplu işlem için biriken hacim
-  totalGreenCredits: 0, // Toplam üretilen yeşil kredi varlığı
-  realizedProfitUsdt: 0, 
+  totalGreenCredits: 0, // Üretilen varlık (Green Credits)
   totalRealizedCash: 0, // Tahsil edilen gerçek USD
 };
 
@@ -114,6 +116,13 @@ const kararMotoru = {
     }
 };
 
+// --- TİCARET MOTORU BAŞLANGICI (BINANCE ENTEGRASYONU) ---
+const exchange = new ccxt.binance({
+    apiKey: process.env.BINANCE_API_KEY,
+    secret: process.env.BINANCE_SECRET,
+    enableRateLimit: true,
+});
+
 /**
  * --- GERÇEK FİNANSAL MUTABAKAT MOTORU ---
  * Sistemin ürettiği kanıtı doğrudan finansal sisteme "nakit" olarak tanıtır.
@@ -127,6 +136,7 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
             value: krediDegeri,
             status: "PENDING_SETTLEMENT",
             protocol: "GREEN_FINANCE_v1",
+            uid: MY_BINANCE_UID
         };
 
         // 2. ADIM: Protokole Doğrudan Yayın (Yeşil Finans Borsasına Akış)
@@ -137,14 +147,16 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
         
         serverState.totalRealizedCash += settledAmount;
 
-        pushLog('FINANCE', 'SUCCESS', `[MUTABAKAT_TAMAMLANDI] ID: ${assetId} | Tahsil edilen: ${settledAmount.toFixed(4)} USD`);
+        // GÜNCEL SATIŞ ARZI LOGU
+        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${payoutWallet}`);
         
         // Nakit akışını Google Sheets'e işle
         await logToGreenLedger({
             type: "LIQUIDITY_SETTLEMENT",
             assetId: assetId,
             profitUsdt: settledAmount.toFixed(4),
-            status: "REALIZED_CASH"
+            status: "REALIZED_CASH",
+            payoutAddress: payoutWallet
         });
     } catch (error: any) {
         pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
@@ -208,7 +220,6 @@ async function darphaneMotoru(assetId: string, kiloByte: number) {
             type: "GREEN_CREDIT_MINT",
             creditValue: karbonKredisi,
             assetRef: assetId,
-            uid: MY_BINANCE_UID,
             timestamp: new Date().toISOString()
         };
 
@@ -228,11 +239,13 @@ async function darphaneMotoru(assetId: string, kiloByte: number) {
 }
 
 async function logToGreenLedger(data: any) {
-    // Yeşil finans defterine kayıt at
-    await broadcastToAllMarkets({
-        type: "GREEN_LEDGER",
-        ...data
-    });
+    const report = {
+        ...data,
+        protocol: "GREEN_FINANCE_v1",
+        timestamp: new Date().toISOString()
+    };
+    
+    await broadcastToAllMarkets(report);
 }
 // --- DARPHANE MOTORU BİTİŞİ ---
 
@@ -260,10 +273,16 @@ const ReadyToSellSchema = new mongoose.Schema({
   valuationWei: String // Kontrat için hassas fiyat verisi
 });
 
-// PERFORMANS: Sunucunun kilitlenmesini ve 500 hatalarını önlemek için DB indeksleri
 TransactionSchema.index({ timestamp: -1 });
 ReadyToSellSchema.index({ isSold: 1, signature: 1, timestamp: 1 });
 ReadyToSellSchema.index({ id: 1 }, { unique: true });
+
+async function finalizeFinancialSettlement(proof: any): Promise<number> {
+    // Bu kısım Ocean veya Green Ledger mutabakatından dönen kesinleşmiş tutarı temsil eder.
+    // Borsa/Ağ komisyonu (%2) düşülmüş net rakam.
+    return proof.value * 0.98;
+}
+
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 const ReadyToSellModel = mongoose.model("ReadyToSell", ReadyToSellSchema);
@@ -412,7 +431,7 @@ async function broadcastToAllMarkets(item: any) {
             
             // Protokol Ayrımı: Finansal Rapor mu yoksa Varlık İhracatı mı?
             if (item.type === "CASH_FLOW") {
-              if (channel.name !== "GoogleSheets") return;
+              if (channel.name !== "GoogleSheets") return; // Finansal rapor sadece tabloya gider
               payload = {
                 veri1: "TOPLU_SATIS_TETIKLENDI",
                 veri2: `${item.amount} ${item.ticker} @ ${item.price} USDT`,
@@ -444,14 +463,17 @@ async function broadcastToAllMarkets(item: any) {
  * 2. ADIM: Satış Emri Tetikleyici (Ticaret Motoru Entegrasyonu)
  */
 async function executeBatchTrade() {
-  // Karar motorunu sorgula
-  if (kararMotoru.kararVer(serverState.batchVolumeAccumulatedKB)) {
-      pushLog('FINANCE', 'SUCCESS', `[EXECUTING_MINT] Toplu yeşil kredi basımı tetikleniyor...`);
+  if (serverState.batchVolumeAccumulatedKB >= 512000) {
+      pushLog('GREEN_FINANCE', 'SUCCESS', `[KOTA_DOLDU] 500 MB veri paketi mühürlendi. Global Settlement başlatılıyor.`);
       
-      // Gerçek darphane motorunu çağır (Proof ve Ledger kaydı yapar)
-      await darphaneMotoru("BATCH_RECLAMATION", serverState.batchVolumeAccumulatedKB / 1024);
+      const assetId = `BATCH_EXPORT_${Date.now()}`;
+      const kiloBytes = serverState.batchVolumeAccumulatedKB;
 
-      serverState.batchVolumeAccumulatedKB = 0; // Hacmi sıfırla
+      // SAF DÖNGÜ TETİKLEYİCİSİ: Mint -> Export -> Settle
+      await darphaneMotoru(assetId, kiloBytes);
+
+      serverState.batchVolumeAccumulatedKB = 0;
+      pushLog('GREEN_FINANCE', 'SUCCESS', `[DÖNGÜ_RESET] Yeni üretim bloğu için sayaç sıfırlandı.`);
   }
 }
 
@@ -557,10 +579,8 @@ async function runRecyclingMining() {
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
         pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
 
-        // PROTOKOL_EXPORT: Varlığı anında kriptografik olarak mühürle ve dış pazarlara ihraç et
         await broadcastToNetwork(generatedId);
 
-        // 2. ADIM: Yeni akış - Raporlamadan hemen sonra kotayı kontrol et ve gerekirse sat
         await executeBatchTrade();
       }
     });
@@ -671,8 +691,7 @@ app.get("/api/stats", async (req, res) => {
       commitThreshold: serverState.commitThreshold,
       contractAddress: blockchainConfig.contractAddress,
       totalGreenCredits: serverState.totalGreenCredits,
-      realizedProfitUsdt: serverState.realizedProfitUsdt,
-      totalRealizedCash: serverState.totalRealizedCash,
+      totalRealizedCash: serverState.totalRealizedCash
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);

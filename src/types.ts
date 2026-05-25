@@ -56,7 +56,6 @@ export interface CoreStats {
   commitThreshold: number;
   contractAddress: string;
   totalGreenCredits: number;
-  realizedProfitUsdt: number;
   totalRealizedCash: number;
   // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
