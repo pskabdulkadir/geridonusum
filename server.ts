@@ -277,13 +277,6 @@ TransactionSchema.index({ timestamp: -1 });
 ReadyToSellSchema.index({ isSold: 1, signature: 1, timestamp: 1 });
 ReadyToSellSchema.index({ id: 1 }, { unique: true });
 
-async function finalizeFinancialSettlement(proof: any): Promise<number> {
-    // Bu kısım Ocean veya Green Ledger mutabakatından dönen kesinleşmiş tutarı temsil eder.
-    // Borsa/Ağ komisyonu (%2) düşülmüş net rakam.
-    return proof.value * 0.98;
-}
-
-
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 const ReadyToSellModel = mongoose.model("ReadyToSell", ReadyToSellSchema);
 
@@ -310,7 +303,7 @@ const clients = new Set<any>();
  * Global helper to push a log entry and broadcast to active frontend clients via SSE
  */
 function pushLog(
-  module: 'SYSTEM' | 'MARKET' | 'EXECUTOR' | 'BLOCKCHAIN' | 'AI',
+  module: 'SYSTEM' | 'MARKET' | 'EXECUTOR' | 'BLOCKCHAIN' | 'AI' | 'FINANCE',
   level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'ANALYZE',
   msg: string
 ) {
