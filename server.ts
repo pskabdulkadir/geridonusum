@@ -81,50 +81,6 @@ const serverState = {
   totalRealizedCash: 0, // Tahsil edilen gerçek USD
 };
 
-// 1. ADIM: Ticaret Motorunun "Karar Mekanizması"
-const kararMotoru = {
-    hedefKotaMB: blockchainConfig.batchTradeThresholdMB,
-    
-    // Bakiyeyi kontrol et (API entegrasyonu hazırlığı)
-    async bakiyeKontrol() {
-        try {
-            const balance = await exchange.fetchBalance();
-            const currentUsdt = balance.total['USDT'] || 0;
-            
-            // Yeni ödeme gelmiş mi kontrol et
-            if (currentUsdt > serverState.lastKnownUsdtBalance) {
-                const diff = currentUsdt - serverState.lastKnownUsdtBalance;
-                pushLog('MARKET', 'SUCCESS', `[SATIŞ_ONAYLANDI] Binance cüzdanına ${diff.toFixed(2)} USDT giriş saptandı!`);
-                serverState.lastKnownUsdtBalance = currentUsdt;
-            }
-            
-            return currentUsdt;
-        } catch (err: any) {
-            return serverState.lastKnownUsdtBalance;
-        }
-    },
-
-    // Karar ver: Satış zamanı geldi mi?
-    kararVer(islenenKB: number): boolean {
-        const islenenMB = islenenKB / 1024;
-        if (islenenMB >= this.hedefKotaMB) {
-            pushLog('MARKET', 'ANALYZE', `[KOTA_DOLDU] Hedef kota (${this.hedefKotaMB} MB) aşıldı. Satış prosedürü tetikleniyor.`);
-            return true;
-        } else {
-            const kalan = (this.hedefKotaMB - islenenMB).toFixed(2);
-            pushLog('MARKET', 'INFO', `[KOTA_TAKİP] Mevcut: ${islenenMB.toFixed(2)} MB. Satışa kalan: ${kalan} MB`);
-            return false;
-        }
-    }
-};
-
-// --- TİCARET MOTORU BAŞLANGICI (BINANCE ENTEGRASYONU) ---
-const exchange = new ccxt.binance({
-    apiKey: process.env.BINANCE_API_KEY,
-    secret: process.env.BINANCE_SECRET,
-    enableRateLimit: true,
-});
-
 /**
  * --- GERÇEK FİNANSAL MUTABAKAT MOTORU ---
  * Sistemin ürettiği kanıtı doğrudan finansal sisteme "nakit" olarak tanıtır.
@@ -138,7 +94,6 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
             value: krediDegeri,
             status: "PENDING_SETTLEMENT",
             protocol: "GREEN_FINANCE_v1",
-            uid: MY_BINANCE_UID
         };
 
         // 2. ADIM: Protokole Doğrudan Yayın (Yeşil Finans Borsasına Akış)
