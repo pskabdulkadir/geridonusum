@@ -72,18 +72,36 @@ export class BlockchainRouter {
   }
 
   public async validateOnChainStatus() { // Metodu public yaptık
-    const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
-    const wallet = new ethers.Wallet(this.privateKey, provider);
-    
-    if (this.contractAddress !== ethers.constants.AddressZero) {
-        const code = await provider.getCode(this.contractAddress);
-        if (code === "0x") {
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        const provider = new ethers.providers.JsonRpcProvider({
+          url: this.rpcUrl,
+          skipFetchSetup: true // NoNetwork hatasını azaltmaya yardımcı olur
+        });
+
+        // Ağın hazır olmasını bekle
+        await provider.ready;
+        await provider.getNetwork();
+
+        if (this.contractAddress !== ethers.constants.AddressZero) {
+          const code = await provider.getCode(this.contractAddress);
+          if (code === "0x") {
             this.emitLog('BLOCKCHAIN', 'ERROR', `KRITIK: ${this.contractAddress} adresinde kontrat bulunamadı!`);
-            this.isRealMode = false;
-        } else {
+          } else {
             this.emitLog('BLOCKCHAIN', 'SUCCESS', `Sözleşme doğrulandı: ${this.contractAddress}`);
+          }
         }
+        return; // Başarılıysa döngüden çık
+      } catch (err: any) {
+        attempts++;
+        this.emitLog('BLOCKCHAIN', 'WARNING', `Ağ bağlantı denemesi ${attempts}/${maxAttempts} başarısız: ${err.message}`);
+        if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 5000));
+      }
     }
+    this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: Ağ algılanamadı (noNetwork). RPC ayarlarını kontrol edin.");
   }
 
   public registerLogger(cb: typeof this.logCallback) {
