@@ -84,10 +84,10 @@ export class WebCrawler {
       this.emitLog('CRAWLER', 'INFO', `İndirme dizisi başlatılıyor: ${currentUrl}`);
       const response = await axios.get(currentUrl, {
         headers,
-        timeout: 8000,
+        timeout: 15000,
         responseType: 'text',
-        maxContentLength: 7340032, // 7MB Güvenli Sınır (OOM ve 502 hatalarını önler)
-        maxBodyLength: 7340032
+        maxContentLength: 52428800, // 50MB Sınırı (Büyük teknik dökümanlar için)
+        maxBodyLength: 52428800
       });
 
       const html = response.data;

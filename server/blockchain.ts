@@ -60,12 +60,30 @@ export class BlockchainRouter {
     this.privateKey = pkey;
     this.contractAddress = contract;
 
-    // ÜRETİM MODU ZORUNLULUĞU: Simülasyon kapıları kalıcı olarak kapatıldı.
-    if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
-      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya hatalı! Sistem gerçek işlem yapamaz. Lütfen .env dosyasını kontrol edin.");
-      this.isRealMode = false;
-    } else {
+    // ÜRETİM MODU DOĞRULAMASI: Cüzdanın ve kontratın geçerliliğini kontrol et
+    try {
+      if (!this.privateKey || this.privateKey.includes('YOUR_PRIVATE_KEY') || this.privateKey.includes('0xtest')) {
+        throw new Error("Invalid private key placeholder");
+      }
+      this.validateOnChainStatus();
       this.isRealMode = true;
+    } catch (err) {
+      this.emitLog('BLOCKCHAIN', 'ERROR', "KRITIK: PRIVATE_KEY eksik veya geçersiz! Sistem gerçek işlem yapamaz. Lütfen .env dosyasını kontrol edin.");
+      this.isRealMode = false;
+  }
+
+  private async validateOnChainStatus() {
+    const provider = new ethers.providers.JsonRpcProvider(this.rpcUrl);
+    const wallet = new ethers.Wallet(this.privateKey, provider);
+    
+    if (this.contractAddress !== ethers.constants.AddressZero) {
+        const code = await provider.getCode(this.contractAddress);
+        if (code === "0x") {
+            this.emitLog('BLOCKCHAIN', 'ERROR', `KRITIK: ${this.contractAddress} adresinde kontrat bulunamadı!`);
+            this.isRealMode = false;
+        } else {
+            this.emitLog('BLOCKCHAIN', 'SUCCESS', `Sözleşme doğrulandı: ${this.contractAddress}`);
+        }
     }
   }
 
@@ -77,10 +95,10 @@ export class BlockchainRouter {
    * Cüzdan adresini döndür (PRIVATE_KEY'den türetilmiş)
    */
   public getWalletAddress(): string {
-    if (!this.privateKey || this.privateKey.includes('0xtest')) {
-      return "";
-    }
     try {
+      if (!this.privateKey || this.privateKey.includes('0xtest') || this.privateKey.includes('YOUR_PRIVATE_KEY')) {
+        return "";
+      }
       const wallet = new ethers.Wallet(this.privateKey);
       return wallet.address;
     } catch {

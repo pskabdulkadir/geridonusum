@@ -14,12 +14,23 @@ import axios from "axios";
 import { ethers } from "ethers";
 import { createServer as createViteServer } from "vite";
 import * as dotenv from "dotenv";
+import dns from "dns";
 
 // Load environment variables
 dotenv.config();
 
+// DNS Workaround: IPv6 önceliği nedeniyle oluşan ENOTFOUND hatalarını engelle
+dns.setDefaultResultOrder("ipv4first");
+
 // Load config first
 import { blockchainConfig, dbConfig } from "./server/config.ts";
+
+// --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
+const web3Config = {
+    payoutWallet: process.env.PAYOUT_WALLET || process.env.CHANNEL_ROUTING_WALLET || "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
+    rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || "https://polygon-rpc.com",
+    contractAddress: process.env.SMART_GATE_CONTRACT_ADDRESS || process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
+};
 
 // Modules
 import { BlockchainRouter } from "./server/blockchain.ts";
@@ -32,20 +43,24 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 export const mainOptimizer = new DataOptimizer();
-export const mainBlockchain = new BlockchainRouter();
 export const mainMarketplace = new MarketplaceManager();
-export const mainCrawler = new WebCrawler({
-  delayMs: 5000, // Her istek arasında 5 saniye bekle
-  targetLimit: 999999
+
+// Settlement Queue: Mutabakat işlemlerini crawler'dan izole eder
+const settlementQueue: { assetId: string, creditValue: number }[] = [];
+
+// mainBlockchain'i web3Config'den gelen doğru contractAddress ile başlat
+export const mainBlockchain = new BlockchainRouter({
+  contractAddress: web3Config.contractAddress,
+  privateKey: process.env.PRIVATE_KEY, // PRIVATE_KEY'i de geçirin
+  rpcUrl: web3Config.rpcUrl // RPC URL'i de geçirin
 });
 
-// --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
-// Binance ve ccxt gibi merkezi borsa kalıntıları tamamen imha edildi.
-const web3Config = {
-    payoutWallet: process.env.PAYOUT_WALLET || process.env.CHANNEL_ROUTING_WALLET || "0x89205abAE846560fdEB791C1fEe17482D2Ec739D",
-    rpcUrl: process.env.POLYGON_RPC_URL || process.env.RPC_URL || "https://polygon-rpc.com",
-    contractAddress: process.env.SMART_GATE_CONTRACT_ADDRESS || process.env.OCEAN_MARKET_CONTRACT || process.env.CONTRACT_ADDRESS || "0x027663260901e6878411c521360814C45d2e7d70"
-};
+export const mainCrawler = new WebCrawler({
+  delayMs: 5000, // Her istek arasında 5 saniye bekle
+  targetLimit: 999999,
+  maxConcurrentRequests: 5,
+  maxQueueSize: 1000
+});
 
 // 1. HEDEF BELİRLEME (Seed URLs)
 const crawlerSeeds = [
@@ -104,26 +119,38 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
         // 2. ADIM: Protokole Doğrudan Yayın (Yeşil Finans Borsasına Akış)
         await broadcastToGreenFinanceNetwork(proofOfCleansing);
 
-        // 3. ADIM: Otomatik Tahsilat (Settlement)
-        const settledAmount = await finalizeFinancialSettlement(proofOfCleansing);
-        
-        serverState.totalRealizedCash += settledAmount;
+        // 3. ADIM: Kuyruğa Ekle (Async Isolation)
+        settlementQueue.push({ assetId, creditValue: krediDegeri });
+        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${assetId} mutabakat kuyruğuna eklendi.`);
+    } catch (error: any) {
+        pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
+    }
+}
 
+async function processSettlementQueue() {
+    if (settlementQueue.length === 0) return;
+    const task = settlementQueue.shift();
+    if (!task) return;
+
+    try {
+        const settledAmount = await finalizeFinancialSettlement({ id: task.assetId, value: task.creditValue });
+        serverState.totalRealizedCash += settledAmount;
         // GÜNCEL SATIŞ ARZI LOGU
         pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${web3Config.payoutWallet}`);
         
         // Nakit akışını Google Sheets'e işle
         await logToGreenLedger({
             type: "LIQUIDITY_SETTLEMENT",
-            assetId: assetId,
+            assetId: task.assetId,
             profitUsdt: settledAmount.toFixed(4),
             status: "REALIZED_CASH",
             payoutAddress: web3Config.payoutWallet
         });
-    } catch (error: any) {
-        pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
+    } catch (err: any) {
+        pushLog('FINANCE', 'ERROR', `[SETTLEMENT_FAILED] ${task.assetId}: ${err.message}`);
     }
 }
+setInterval(processSettlementQueue, 15000); // 15 saniyede bir kuyruğu işle
 
 async function broadcastToGreenFinanceNetwork(proof: any) {
   try {
@@ -193,12 +220,19 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
           headers: commonHeaders,
           timeout: 20000 // Global ağ gecikmeleri için süre artırıldı
         });
-        pushLog('FINANCE', 'SUCCESS', `[AQUARIUS_OK] DDO Aquarius'a başarıyla kaydedildi.`);
+        pushLog('FINANCE', 'SUCCESS', `[AQUARIUS_INDEXED] DDO Aquarius'a kaydedildi.`);
 
         // 2. ADIM: Provider'a bildir (Servisi başlat)
         const providerUrl = "https://v4.provider.oceanprotocol.com/api/services/initialize";
         pushLog('FINANCE', 'INFO', `[GLOBAL_EXPORT] Provider Handshake başlatılıyor...`);
-        response = await axios.post(providerUrl, ddoPayload, {
+        response = await axios.post(providerUrl, {
+          document: ddoPayload, // Tam DDO objesi
+          serviceId: ddoPayload.services[0].id, // DDO içindeki ilk servisin ID'si
+          datatokenAddress: ddoPayload.services[0].datatokenAddress,
+          nftAddress: ddoPayload.nftAddress,
+          consumerAddress: wallet.address, // Tüketici adresi olarak cüzdan adresini gönder
+          chainId: 137 // Polygon Mainnet doğrulaması
+        }, {
           headers: {
             ...commonHeaders, // Ortak başlıkları kullan
           },
@@ -207,9 +241,9 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
         success = true;
       } catch (error: any) {
         if (attempts < maxRetries) {
-          pushLog('FINANCE', 'WARNING', `[GLOBAL_API_RETRY] Ocean Protocol bağlantı hatası, yeniden deneniyor (${attempts}/${maxRetries}): ${error.message}`);
-          // 3 saniye bekle ve yeniden dene
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          const backoff = 3000 * Math.pow(2, attempts - 1); // Exponential backoff (3s, 6s, 12s)
+          pushLog('FINANCE', 'WARNING', `[GLOBAL_API_RETRY] Ocean Protocol bağlantı hatası, ${backoff/1000}sn içinde yeniden deneniyor (${attempts}/${maxRetries}): ${error.message}`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
         } else {
           throw error; // Maksimum deneme sayısına ulaşıldı, hatayı fırlat
         }
@@ -258,7 +292,7 @@ async function darphaneMotoru(assetId: string, kiloByte: number) {
         // 3. ADIM: OTONOM ÖDÜLLENDİRME
         serverState.totalGreenCredits += parseFloat(karbonKredisi);
         
-        pushLog('FINANCE', 'SUCCESS', `[DARPHANE_MINTED] +${karbonKredisi} Yeşil Kredi üretildi. Toplam Varlık: ${serverState.totalGreenCredits.toFixed(4)}`);
+        pushLog('FINANCE', 'SUCCESS', `[CREDIT_CALCULATED] +${karbonKredisi} Yeşil Kredi hesaplandı. Toplam Varlık: ${serverState.totalGreenCredits.toFixed(4)}`);
 
         // PROTOKOL_SETTLEMENT: Kredi basıldıktan sonra anında gerçek nakit mutabakatını çalıştır
         await mutabakatMotoru(assetId, parseFloat(karbonKredisi));
