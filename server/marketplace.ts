@@ -25,8 +25,8 @@ export class MarketplaceManager {
    * PROTOKOL_1: prepareAssetForSale (Gasless)
    * Veriyi satışa hazırlar ve alıcının işlemi başlatacağı yapıya sokar.
    */
-  public async prepareAssetForSale(dataId: string, priceInUsdt: number) {
-    this.emitLog('MARKET', 'SUCCESS', `[PREPARE_LISTING] ${dataId} satışa hazırlandı. Gas ücreti alıcıya devredildi.`);
-    return { status: "READY", dataId, priceInUsdt };
+  public async prepareDataAssetForAccess(dataAssetId: string, accessFeeInUsdt: number) {
+    this.emitLog('MARKET', 'SUCCESS', `[DATA_ASSET_PREPARED] ${dataAssetId} veri erişimine hazırlandı. Erişim ücreti alıcıya devredildi.`);
+    return { status: "READY", dataAssetId, accessFeeInUsdt };
   }
 }

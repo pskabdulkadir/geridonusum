@@ -49,18 +49,18 @@ export async function generateEcoReport(
   }
 
   try {
-    const prompt = `Siz seçkin bir Yeşil Teknoloji (GreenTech) Mimarı, Sürdürülebilir Web Uzmanı ve Siber Güvenlik Denetçisisiniz.
-Bu kod temizleme verilerini analiz edin ve Türkçe dilinde oldukça profesyonel bir "Yeşil Kod Dönüşüm Planı" denetim ve öneri raporu çıktısı üretin (Markdown biçiminde, yaklaşık 150-200 kelime).
+    const prompt = `Siz seçkin bir Veri Analisti, Çevresel Veri Bilimcisi ve Sürdürülebilir Teknoloji Uzmanısınız.
+Bu web sayfası analiz verilerini değerlendirin ve Türkçe dilinde oldukça profesyonel bir "Karbon Emisyon Verisi Analiz Raporu" ve "Veri Optimizasyon Önerileri" çıktısı üretin (Markdown biçiminde, yaklaşık 150-200 kelime).
 
 Hedef Düğüm URL'si: ${url}
 Orijinal Boyut: ${(originalBytes / 1024).toFixed(2)} KB
 Optimize Edilmiş Boyut: ${(optimizedBytes / 1024).toFixed(2)} KB
 Veri Azaltma Hacmi: ${(bytesSaved / 1024).toFixed(2)} KB (%${savingPct} budandı)
-Tahmini Engellenen CO₂: Yılda ${co2SavedGrams.toFixed(4)} gram (yıllık 35.000 sunucu isteği senaryosuna göre)
+Hesaplanan CO₂ Emisyon Analizi: Yılda ${co2SavedGrams.toFixed(4)} gram (yıllık 35.000 sunucu isteği senaryosuna göre)
 
 Yanıtı aşağıdaki başlıkları içerecek şekilde Türkçe dilinde ve estetik bir Markdown formatında sunun:
-1. **Karanlık Veri Teşhisi** - Bu tür sayfalarda genellikle web sitesinde şişkinliğe (bloat) neden olan yapısal sorunların kısa bir analizi.
-2. **Enerji Refaktör Önerileri** - Barındırma (hosting) enerji verimliliğini optimize etmek, veri iletim maliyetlerini düşürmek ve sunucu CPU yükünü azaltmak için geliştiricilere yönelik tam 3 adet kalın yazılmış, uygulanabilir tavsiye.
+1. **Veri Kirliliği Teşhisi** - Bu tür web sayfalarında genellikle gereksiz veri yüküne neden olan yapısal sorunların kısa bir analizi.
+2. **Veri Optimizasyon Önerileri** - Veri iletimini optimize etmek, depolama maliyetlerini düşürmek ve çevresel etkiyi azaltmak için geliştiricilere yönelik tam 3 adet kalın yazılmış, uygulanabilir tavsiye.
 
 Reklam dilinden veya aşırı resmi olmayan geliştirici jargonundan kaçının. Profesyonel ve ciddi bir üslupla konuşun. Yanıt tamamen Türkçe olmalıdır.`;
 

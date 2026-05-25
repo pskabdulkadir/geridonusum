@@ -51,9 +51,8 @@ export default function App() {
     currentCrawlingUrl: "",
     readyToSell: [],
     payoutWalletAddress: "", // Will be fetched from /api/stats
-    totalGreenCredits: 0,
-    realizedProfitUsdt: 0,
-    totalRealizedCash: 0, // Tahsil edilen gerçek nakit (Settlement)
+    totalDataInsightsPublished: 0, // Yayınlanan veri analitiği raporu sayısı
+    totalAccessFeesCollected: 0, // Tahsil edilen gerçek nakit (Veri Erişim Ücretleri)
   }); // zeroGasModeActive kaldırıldı
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -473,7 +472,7 @@ export default function App() {
           </div>
           <div className="mt-4">
             <div className="text-2xl md:text-3xl font-display font-medium text-amber-500 tracking-tight">
-              {stats.totalCo2SavedGrams ? stats.totalCo2SavedGrams.toFixed(4) : "0.0000"} <span className="text-xs font-mono text-slate-400">g CO₂</span>
+              {stats.totalCo2SavedGrams ? stats.totalCo2SavedGrams.toFixed(4) : "0.0000"} <span className="text-xs font-mono text-slate-400">g CO₂ Analizi</span>
             </div>
             <p className="text-slate-500 text-[10px] mt-1">Erişimi önlenen tahmini karbon emisyonu</p>
           </div>
@@ -483,12 +482,12 @@ export default function App() {
         <div className="bg-slate-900/50 border border-slate-800 hover:border-pink-500/30 transition-all rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-lg group relative overflow-hidden">
           <div className="absolute top-0 right-0 w-20 h-20 bg-pink-500/5 rounded-full blur-xl transition-all group-hover:bg-pink-500/10"></div>
           <div className="flex items-center justify-between text-slate-400 text-xs font-mono uppercase tracking-wider">
-            <span>Basılan Kanıtlar</span>
+            <span>Kayıtlı Veri Varlıkları</span>
             <Coins className="w-4.5 h-4.5 text-pink-500" />
           </div>
           <div className="mt-4">
             <div className="text-2xl md:text-3xl font-display font-medium text-pink-400 tracking-tight">
-              {stats.blockchainProofsMinted} <span className="text-xs font-mono text-slate-400">İşlem</span>
+              {stats.dataAssetRegistrations} <span className="text-xs font-mono text-slate-400">Varlık</span>
             </div>
             <p className="text-slate-500 text-[10px] mt-1">L2 üzerinde gerçekleşen PoC işlemleri</p>
           </div>
@@ -559,7 +558,7 @@ export default function App() {
                 </h3>
 
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-                  Blockchain Executor Modu: Sistem artık sanal tarama yapmaz. Doğrudan akıllı kontrat emirlerini ve imzalı satış işlemlerini yönetir.
+                  Blockchain Executor Modu: Sistem artık sanal tarama yapmaz. Doğrudan akıllı kontrat emirlerini ve imzalı veri erişim işlemlerini yönetir.
                 </p>
 
                 {/* State Meter */}
@@ -625,7 +624,7 @@ export default function App() {
                 </h3>
 
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-                  Güvenli karbon dengeleme damgalarını (PoC) temsil eden anlık blok zinciri işlemleri. Bu işlemler, doğrudan zincir üzerinde yeşil kredi takaslarını doğrular.
+                  Güvenli karbon emisyon verisi analizi kanıtlarını (PoC) temsil eden anlık blok zinciri işlemleri. Bu işlemler, doğrudan zincir üzerinde veri varlığı kayıtlarını doğrular.
                 </p>
 
                 {stats.transactions.length === 0 ? (
@@ -640,8 +639,8 @@ export default function App() {
                       <div key={idx} className="bg-slate-950 border border-slate-800/60 rounded-xl p-3 font-mono text-[11px] flex flex-col gap-2 relative">
                         <div className="flex items-center justify-between">
                           <span className="text-emerald-400 font-medium flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            BASILDI VE İŞLENDİ
+                            <CheckCircle2 className="w-3.5 h-3.5" />                            
+                            KAYDEDİLDİ VE İŞLENDİ
                           </span>
                           <span className="text-slate-500 text-[10px]">
                             {new Date(tx.timestamp).toLocaleTimeString()}
@@ -650,8 +649,8 @@ export default function App() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-400">
                           <div>
-                            <span className="text-slate-500 uppercase text-[9px] block">Dengeleme Hacmi</span>
-                            <span className="text-amber-400 text-xs font-semibold">{tx.savedGrams.toFixed(4)} g CO₂</span>
+                            <span className="text-slate-500 uppercase text-[9px] block">CO₂ Analiz Değeri</span>
+                            <span className="text-amber-400 text-xs font-semibold">{tx.co2AnalysisGrams.toFixed(4)} g CO₂</span>
                           </div>
                           <div>
                             <span className="text-slate-500 uppercase text-[9px] block text-right">Doğrulama Damgası</span>
@@ -669,7 +668,7 @@ export default function App() {
                           <div className="flex items-center gap-2">
                             {tx.simulated ? (
                               <span className="text-[9px] text-emerald-400 font-mono tracking-widest bg-emerald-950/20 border border-emerald-500/20 px-1 py-0.2 rounded">
-                                OTONOM_TRANSFER_OK
+                                SİMÜLE_KAYIT_OK
                               </span>
                             ) : (
                               <span className="text-[9px] text-cyan-400 font-mono tracking-widest bg-cyan-950/20 border border-cyan-500/20 px-1 py-0.2 rounded">
@@ -677,7 +676,7 @@ export default function App() {
                               </span>
                             )}
                             <a 
-                              href={`https://polygonscan.com/tx/${tx.txHash}`} 
+                              href={`https://polygonscan.com/tx/${tx.assetRegistrationTxHash}`} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="text-cyan-400 hover:text-cyan-300 transition-all hover:scale-105"
@@ -694,7 +693,7 @@ export default function App() {
               </div>
 
               <div className="border-t border-slate-800/80 mt-5 pt-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
-                <span>Sözleşme Adresi: 0x...0000</span>
+                <span>Veri Erişim Kontratı: 0x...0000</span>
                 <span>Platform: Polygon Mumbai / L2 POS Korumalı</span>
               </div>
             </div>
@@ -776,13 +775,13 @@ export default function App() {
                     <div className="bg-slate-950 border border-slate-800/50 rounded-xl p-3">
                       <span className="text-[9px] text-slate-500 uppercase block mb-1">Veri Küçülme Oranı</span>
                       <span className="text-base text-emerald-400 font-bold font-display tracking-tight">
-                        {optResult.efficiencyGainPct}%
+                        {optResult.efficiencyGainPct ? optResult.efficiencyGainPct.toFixed(2) : "0.00"}%
                       </span>
                     </div>
                     <div className="bg-slate-950 border border-slate-800/50 rounded-xl p-3">
                       <span className="text-[9px] text-slate-500 uppercase block mb-1">Engellenen Karbon</span>
                       <span className="text-base text-amber-500 font-bold font-display tracking-tight">
-                        {optResult.co2SavingsGrams.toFixed(4)} g
+                        {optResult.co2AnalysisGrams ? optResult.co2AnalysisGrams.toFixed(4) : "0.0000"} g
                       </span>
                     </div>
                   </div>
@@ -802,14 +801,14 @@ export default function App() {
                     </div>
                     <div className="flex justify-between border-b border-slate-800 pb-1.5 text-slate-400">
                       <span>Kanıt Mührü</span>
-                      <span className="text-slate-300 font-semibold text-[10px] break-all max-w-[50%] truncate select-all" title={optResult.proofHash}>
+                      <span className="text-slate-300 font-semibold text-[10px] break-all max-w-[50%] truncate select-all" title={optResult.proofHash || ""}>
                         {optResult.proofHash}
                       </span>
                     </div>
                     {optResult.txHash && (
                       <div className="flex justify-between pb-1 text-slate-400">
                         <span>L2 Ledger Hash</span>
-                        <span className="text-pink-400 hover:underline cursor-pointer flex items-center gap-1 select-all break-all truncate max-w-[50%]" title={optResult.txHash}>
+                        <span className="text-pink-400 hover:underline cursor-pointer flex items-center gap-1 select-all break-all truncate max-w-[50%]" title={optResult.txHash || ""}>
                           {optResult.txHash}
                         </span>
                       </div>
@@ -922,7 +921,7 @@ export default function App() {
                   <span className="text-slate-500 font-mono text-xs">● REAL-TIME ON-CHAIN REVENUE</span>
                 </div>
                 <h3 className="font-display font-bold text-lg md:text-xl text-white uppercase tracking-tight">
-                  Eko-Geri Dönüşüm ve Veri Madenciliği Portalı
+                  Eko-Veri Analitiği ve Erişim Portalı
                 </h3>
                 <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
                   İnternetteki ham karbon emisyon oranlarını ve dağınık veri paketlerini otonom tarayarak, temizlenmiş çevre dostu karbon kredisi raporlarına dönüştüren, akıllı kontrat ödemelerini saniyesinde cüzdanınıza yönlendiren tam otonom kazanç matrisi.
@@ -933,18 +932,18 @@ export default function App() {
               <div className="bg-slate-950/90 border border-emerald-500/30 rounded-2xl p-5 w-full md:w-80 shadow-inner shrink-0 relative overflow-hidden text-right">
                 <div className="absolute top-0 left-0 w-12 h-12 bg-emerald-500/5 rounded-full blur-xl"></div>
                 <div className="flex items-center justify-between border-b border-slate-900 pb-2 mb-2">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">AKÜMÜLE OLAN YEŞİL VARLIK</span>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">TAHSİL EDİLEN ERİŞİM ÜCRETİ</span>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
-                    <span className="text-[9px] font-mono text-emerald-400">MINTING AKTİF</span>
+                    <span className="text-[9px] font-mono text-emerald-400">ERİŞİM_AKTİF</span>
                   </div>
                 </div>
                 <div className="text-3xl md:text-4xl font-display font-medium text-emerald-400 tracking-tight">
-                  ${stats.totalRealizedCash.toFixed(4)} <span className="text-sm font-mono text-slate-500">USD</span>
+                  ${stats.totalAccessFeesCollected.toFixed(4)} <span className="text-sm font-mono text-slate-500">USD</span>
                 </div>
                 <div className="mt-2 text-[11px] font-mono text-emerald-500/80 flex items-center justify-end gap-2 border-t border-slate-900 pt-2">
-                   <span>Toplam Kredi:</span>
-                   <span className="font-bold">{stats.totalGreenCredits.toFixed(6)} GC</span>
+                   <span>Yayınlanan Rapor:</span>
+                   <span className="font-bold">{stats.totalDataInsightsPublished} Adet</span>
                 </div>
               </div>
             </div>
@@ -976,29 +975,29 @@ export default function App() {
                 <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
                   <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">02</div>
                   <div className="flex items-center gap-2">
-                    <div className="p-1 px-1.5 bg-amber-950 text-amber-400 rounded-lg text-[10px] font-mono border border-amber-500/20">AI CORE</div>
+                    <div className="p-1 px-1.5 bg-amber-950 text-amber-400 rounded-lg text-[10px] font-mono border border-amber-500/20">AI ANALİZ</div>
                     <span className="text-xs font-semibold text-white font-mono">2. Yapay Zeka Süzgeci</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Gemini 3.5 modeli ile rafine edilip mühürlenir, ticari değeri yüksek "Karbon Kredisi Veri Paketi" haline getirilir.
+                    Gemini 3.5 modeli ile rafine edilip analiz edilir, ticari değeri yüksek "Karbon Emisyon Verisi Analiz Raporu" haline getirilir.
                   </p>
                   <div className="text-[10px] font-mono text-amber-400/80 mt-1">
                     ★ RAPOR ÜRETİMİ ENTEGRE
                   </div>
                 </div>
 
-                {/* Step 3: Satış Havuzu (SALES_QUEUE) */}
+                {/* Step 3: Veri Varlığı Havuzu (DATA_ASSET_QUEUE) */}
                 <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
                   <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">03</div>
                   <div className="flex items-center gap-2">
-                    <div className="p-1 px-1.5 bg-pink-950 text-pink-400 rounded-lg text-[10px] font-mono border border-pink-500/20">SALES_QUEUE</div>
-                    <span className="text-xs font-semibold text-white font-mono">3. Satış Kuyruğu (Contract)</span>
+                    <div className="p-1 px-1.5 bg-pink-950 text-pink-400 rounded-lg text-[10px] font-mono border border-pink-500/20">DATA_ASSET_QUEUE</div>
+                    <span className="text-xs font-semibold text-white font-mono">3. Veri Varlığı Kuyruğu (Ocean Protocol)</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Güvenli satış kapısında alıcılara sunulur. Blockchain üzerinde alıcının ödeme yapması beklenir.
+                    Ocean Protocol üzerinde alıcılara sunulur. Alıcının veri erişim ücretini ödemesi beklenir.
                   </p>
                   <div className="text-[10px] font-mono text-pink-400/80 mt-1">
-                    {stats.readyToSell ? stats.readyToSell.filter(x => !x.isSold).length : 0} ADET HAZIR PORTFÖY
+                    {stats.readyToSell ? stats.readyToSell.filter(x => !x.isSold).length : 0} ADET HAZIR VERİ VARLIĞI
                   </div>
                 </div>
 
@@ -1006,11 +1005,11 @@ export default function App() {
                 <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 flex flex-col gap-1.5 relative">
                   <div className="absolute top-3 right-3 text-slate-800 font-mono font-black text-xl">04</div>
                   <div className="flex items-center gap-2">
-                    <div className="p-1 px-1.5 bg-emerald-950 text-emerald-400 rounded-lg text-[10px] font-mono border border-emerald-500/20">AUTO REVENUES</div>
-                    <span className="text-xs font-semibold text-white font-mono">4. Gelir Dağıtımı (Payout)</span>
+                    <div className="p-1 px-1.5 bg-emerald-950 text-emerald-400 rounded-lg text-[10px] font-mono border border-emerald-500/20">AUTO ACCESS FEES</div>
+                    <span className="text-xs font-semibold text-white font-mono">4. Erişim Ücreti Dağıtımı (Payout)</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Akıllı kontrata gelen her USDT saniyesinde payout cüzdan adresinize gaz ücreti harcatmadan doğrudan yönlendirilir.
+                    Akıllı kontrata gelen her USDT/MATIC erişim ücreti saniyesinde payout cüzdan adresinize gaz ücreti harcatmadan doğrudan yönlendirilir.
                   </p>
                   <div className="text-[10px] font-mono text-slate-500 mt-1 select-all hover:text-emerald-400 transition-colors">
                     {stats.payoutWalletAddress ? `${stats.payoutWalletAddress.slice(0, 8)}...` : "Kurulum Yapılmadı"}
@@ -1048,7 +1047,7 @@ export default function App() {
                       </div>
                       <div className="space-y-2 text-[10px] leading-relaxed text-slate-300">
                         <p><strong className="text-emerald-400">1. Limitleri Kaldır (Sonsuz Tarama):</strong> 100 dosya veya herhangi bir sayısal limit yoktur. Tarama, temizleme ve analiz işlemleri, sistem kapatılmadığı sürece aralıksız (loop) sonsuza kadar devam eder.</p>
-                        <p><strong className="text-emerald-400">2. Sonsuz Madencilik (SALES_QUEUE):</strong> Her tarama döngüsünden sonra elde edilen 'temizlenmiş veri', anlık olarak Satış Havuzuna aktarılır.</p>
+                        <p><strong className="text-emerald-400">2. Sonsuz Veri Analizi (DATA_ASSET_QUEUE):</strong> Her tarama döngüsünden sonra elde edilen 'temizlenmiş veri', anlık olarak Veri Varlığı Kuyruğuna aktarılır.</p>
                         <p><strong className="text-emerald-400">3. Enerji Tasarrufu Modu:</strong> Sistem boşta geçen sürelerde kaynak tüketimini minimuma indirmek amacıyla otomatik 'sleep' (uyku) moduna geçer, ancak tarayıcı arka planda aktif kalır.</p>
                         <p><strong className="text-emerald-400">4. Hata Koruması:</strong> Sistem tararken herhangi bir adreste hata alırsa, o adresi akıllıca atlar ve durmaksızın bir sonraki adrese geçerek otonom döngüyü asla bozmaz.</p>
                         <p><strong className="text-emerald-400">5. Gerçek Zamanlı Doğrulama:</strong> Tüm işlemler ağ üzerindeki madenciler tarafından onaylanır. Cüzdanınızda gas ücreti için bakiye bulunduğundan emin olun.</p>
@@ -1061,7 +1060,7 @@ export default function App() {
                 <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
                   <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider mb-4 text-cyan-400 flex items-center gap-1.5">
                     <Coins className="w-4 h-4 text-emerald-400" />
-                    GELİR HEDEFİ & KANAL YÖNLENDİRME
+                    ERİŞİM ÜCRETİ HEDEFİ & KANAL YÖNLENDİRME
                   </h4>
                   
                   {/* Payout address Input Form */}
@@ -1086,7 +1085,7 @@ export default function App() {
                           {isUpdatingWallet ? "..." : "KAYDET"}
                         </button>
                       </div>
-                      {walletSaveSuccess && (
+                      {walletSaveSuccess && stats.payoutWalletAddress && ( // Sadece payoutWalletAddress varsa göster
                         <p className="text-[10px] text-emerald-400 font-mono animate-pulse">✓ Cüzdan yönlendirme adresi başarıyla kaydedildi!</p>
                       )}
                     </div>
@@ -1094,15 +1093,15 @@ export default function App() {
                     {/* Micro parameters */}
                     <div className="bg-slate-950 border border-slate-800/40 p-3.5 rounded-xl font-mono text-[10px] space-y-1.5 text-slate-400">
                       <div className="flex justify-between">
-                        <span>Akıllı Kapı Sözleşmesi:</span>
+                        <span>Veri Erişim Kontratı:</span>
                         <span className="text-slate-300 font-semibold text-[9px] select-all uppercase">0x71C7656EC7ab88b098defB751B7401B5f6d8976F</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Kanal Yönlendirme Cüzdanı:</span>
+                        <span>Erişim Ücreti Yönlendirme Cüzdanı:</span>
                         <span className="text-emerald-400 font-semibold text-[9px] select-all truncate max-w-[160px]">{stats.payoutWalletAddress || "Atanmadı"}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Ortak Dağıtım Havuzu:</span>
+                        <span>Ortak Veri Havuzu:</span>
                         <span className="text-cyan-400">ETKİN (Sözleşme Seviyesi)</span>
                       </div>
                       <div className="flex justify-between">
@@ -1151,7 +1150,7 @@ export default function App() {
                             <span className={`px-2.5 py-1 rounded-lg font-mono font-bold uppercase text-[9px] ${
                               walletBalance.isLow
                                 ? "bg-orange-950/40 border border-orange-500/30 text-orange-400"
-                                : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-400"
+                                : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-400" // isLow kontrolü burada da olmalı
                             }`}>
                               {walletBalance.isLow ? "⚠️ BAKİYE DÜŞÜK" : "✓ GAS YETERLİ"}
                             </span>
@@ -1194,7 +1193,7 @@ export default function App() {
                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/80">
                       <h4 className="font-display font-semibold text-white uppercase text-xs tracking-wider text-amber-500 flex items-center gap-1.5">
                         <Database className="w-4.5 h-4.5 text-amber-500" />
-                        PENDING_QUEUE / HAZIR ENVANTER ({stats.readyToSell?.filter(x => !x.isSold).length || 0})
+                        VERİ VARLIĞI KUYRUĞU / ERİŞİME HAZIR RAPORLAR ({stats.readyToSell?.filter(x => !x.isSold).length || 0})
                       </h4>
                       <button onClick={handlePublishAll} className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded hover:bg-emerald-900 transition-all cursor-pointer">PUBLISH ALL (THE PUSH)</button>
                     </div>
@@ -1218,10 +1217,10 @@ export default function App() {
                         </span>
                         <div>
                           <span className="text-slate-300 font-mono font-bold tracking-wide uppercase block text-[10px]">
-                          {stats.isCrawling ? "OTONOM GELİR TOPLAMA SİSTEMİ: AKTİF (OTOMATİK)" : "OTONOM GELİR TOPLAMA SİSTEMİ: PASİF (MANUEL)"}
+                          {stats.isCrawling ? "OTONOM VERİ ERİŞİM SİSTEMİ: AKTİF (OTOMATİK)" : "OTONOM VERİ ERİŞİM SİSTEMİ: PASİF (MANUEL)"}
                           </span>
                           <span className="text-[9px] text-slate-500 font-mono block leading-relaxed max-w-[420px]">
-                          {stats.isCrawling ? "Sistem her yeni veride otomatik ödeme emri oluşturur ve geliri cüzdanınıza sevk eder." : "Geliri çekmek için sağdaki 'ÖDEMEYİ TAHSİL ET' düğmesini kullanmalısınız."}
+                          {stats.isCrawling ? "Sistem her yeni veri analizi raporunda otomatik erişim voucheri oluşturur ve ücreti cüzdanınıza sevk eder." : "Erişim ücretini tahsil etmek için sağdaki 'ERİŞİM ÜCRETİNİ TAHSİL ET' düğmesini kullanmalısınız."}
                           </span>
                         </div>
                       </div>
@@ -1263,7 +1262,7 @@ export default function App() {
                                 <span className="font-mono text-[10px] text-slate-500 max-w-[150px] sm:max-w-[200px] truncate select-all">{item.url}</span>
                               </div>
                               <div className="flex items-center gap-2 font-mono">
-                                <span className="text-xs font-bold text-emerald-400">${item.marketPriceUSD.toFixed(2)} USDT</span>
+                                <span className="text-xs font-bold text-emerald-400">${item.accessPriceUSD.toFixed(2)} USDT</span>
                                 {item.isSold ? (
                                   <span className="bg-slate-800 text-slate-400 border border-slate-700 rounded px-2 py-0.5 text-[10px] uppercase">✓ GELİR YÖNLENDİRİLDİ</span>
                                 ) : (
@@ -1272,7 +1271,7 @@ export default function App() {
                                     disabled={purchaseInProgress !== null}
                                     className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition-all cursor-pointer disabled:opacity-50"
                                   >
-                                    {purchaseInProgress === item.id ? "İŞLENİYOR..." : "ÖDEMEYİ TAHSİL ET"}
+                                    {purchaseInProgress === item.id ? "İŞLENİYOR..." : "ERİŞİM ÜCRETİNİ TAHSİL ET"}
                                   </button>
                                 )}
                               </div>
@@ -1288,8 +1287,8 @@ export default function App() {
                                   <span key={`${keyword}-${keywordIdx}`} className="bg-slate-900 px-1.5 py-0.2 rounded text-slate-500 text-[9px]">#{keyword}</span>
                                 ))}
                               </div>
-                              <span className="text-slate-600 text-[9px]">
-                                CO2 Değeri: <strong className="text-slate-400">{item.co2SavingsGrams.toFixed(3)}g</strong> | Kanıt Hash: <span className="text-slate-500 text-[8px] select-all font-mono">{item.proofHash.substring(0, 16)}...</span>
+                              <span className="text-slate-600 text-[9px]">                                
+                                CO2 Analizi: <strong className="text-slate-400">{item.co2AnalysisGrams.toFixed(3)}g</strong> | Kanıt Hash: <span className="text-slate-500 text-[8px] select-all font-mono">{item.proofHash.substring(0, 16)}...</span>
                               </span>
                             </div>
                           </div>
@@ -1302,7 +1301,7 @@ export default function App() {
                     <Info className="w-5 h-5 text-amber-500 shrink-0" />
                     <div>
                       <strong className="text-slate-300 block mb-0.5 uppercase">Aktif Transfer Prosedürü:</strong>
-                      <span>"ÖDEMEYİ AL" butonunu tetiklediğinizde, alıcının akıllı kontrata (0x71...) yatırdığı USDT/POL/ETH bedeli anında süzülerek tanımlamış olduğunuz payouts yönlendirme cüzdan adresinize gazsız (Zero-Gas) ve anlık transfer olarak iletilir.</span>
+                      <span>"ERİŞİM ÜCRETİNİ TAHSİL ET" butonunu tetiklediğinizde, alıcının akıllı kontrata (0x71...) yatırdığı USDT/POL/ETH erişim ücreti anında süzülerek tanımlamış olduğunuz payout yönlendirme cüzdan adresinize gazsız (Zero-Gas) ve anlık transfer olarak iletilir.</span>
                     </div>
                   </div>
                 </div>

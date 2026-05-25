@@ -20,19 +20,19 @@ const mongoUri = process.env.MONGO_URI || 'mongodb+srv://Abdulkadir1983:Abdulkad
 export const blockchainConfig = {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     appUrl: process.env.APP_URL || '',
-    contractAddress: process.env.CONTRACT_ADDRESS || process.env.SMART_GATE_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000',
+    contractAddress: process.env.CONTRACT_ADDRESS || process.env.SMART_GATE_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000', // Data NFT Factory veya Veri Erişim Kontratı
     payoutWallet: process.env.CHANNEL_ROUTING_WALLET || process.env.PAYOUT_WALLET || '0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4',
     commissionWallet: process.env.COMMISSION_WALLET || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', // Aracı firma cüzdanı (Örn: Smart Gate)
     commissionRate: parseFloat(process.env.COMMISSION_RATE || '0.10'), // %10 Komisyon oranı
-    rpcUrl: process.env.RPC_URL || 'https://polygon.llamarpc.com', // Varsayılan olarak Polygon Mainnet RPC
+    rpcUrl: process.env.RPC_URL || 'https://polygon.llamarpc.com', // Varsayılan olarak Polygon Mainnet RPC (Veri Analitiği İşlemleri için)
     privateKey: process.env.PRIVATE_KEY || process.env.INCOME_DISTRIBUTION_WALLET || '',
     zeroGasActive: false,
     networkMode: process.env.NETWORK_MODE || 'mainnet',
     useAiAnalysis: process.env.USE_AI_ANALYSIS === 'true',
     sharedPoolEnabled: process.env.SHARED_DISTRIBUTION_POOL_ENABLED === 'true',
     batchMining: process.env.BATCH_MINING === 'true',
-    marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.gercek-veri-borsasi.com/v1/list', // Dış pazar yerinin API adresi
-    oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/publish',
+    marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.data-analytics-hub.com/v1/list', // Dış veri pazar yerinin API adresi
+    oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/data-assets', // Ocean Protocol veri varlığı API adresi
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
     openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
     googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxmke0-Fu1FuY0_W6dliNvjm7eH9tOlW2tfOzxJgkEZr2uLY7FIPZ4iDKmn1ZSoV8vo/exec',

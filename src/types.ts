@@ -8,10 +8,10 @@
  */
 
 export interface TransactionRecord {
-  url: string;
-  proofHash: string;
-  savedGrams: number;
-  txHash: string;
+  url: string; // Veri kaynağı URL'si
+  proofHash: string; // Analiz raporunun kriptografik kanıtı
+  co2AnalysisGrams: number; // CO2 analiz değeri
+  assetRegistrationTxHash: string; // Varlık kaydının işlem hash'i
   timestamp: string;
 }
 
@@ -19,15 +19,17 @@ export interface ReadyToSellItem {
   id: string;
   url: string;
   proofHash: string;
-  co2SavingsGrams: number;
+  co2AnalysisGrams: number; // co2SavingsGrams yerine co2AnalysisGrams
   extractedKeywords: string[];
   reportSummary: string;
-  marketPriceUSD: number;
+  accessPriceUSD: number; // marketPriceUSD yerine accessPriceUSD
   isSold: boolean;
   timestamp: string;
-  signature?: string; // Alıcı için hazırlanan voucher imzası
-  sellerAddress?: string; // İmzayı atan yetkili cüzdan
-  valuationWei?: string; // Kontrat için hassas fiyat verisi (BigNumber string olarak)
+  licenseType: string; // Örn: "CC-BY 4.0", "Public Domain", "ODC-BY"
+  sourceAttribution: string; // Orijinal veri portalı adı
+  accessVoucherSignature?: string; // Veri erişim voucheri imzası
+  publisherAddress?: string; // Varlığı yayınlayan cüzdan adresi
+  accessPriceWei?: string; // Kontrat için hassas erişim ücreti verisi (BigNumber string olarak)
 }
 
 export interface SalesLedgerEntry {
@@ -44,7 +46,7 @@ export interface CoreStats {
   optimizedSizeTotal: number;
   totalKiloBytesSaved: number;
   totalCo2SavedGrams: number;
-  blockchainProofsMinted: number;
+  dataAssetRegistrations: number; // blockchainProofsMinted yerine dataAssetRegistrations
   visitedUrls: string[];
   totalEarnings: number;
   transactions: TransactionRecord[];
@@ -55,8 +57,8 @@ export interface CoreStats {
   autonomousMode: boolean;
   commitThreshold: number;
   contractAddress: string;
-  totalGreenCredits: number;
-  totalRealizedCash: number;
+  totalDataInsightsPublished: number; // totalGreenCredits yerine totalDataInsightsPublished
+  totalAccessFeesCollected: number; // totalRealizedCash yerine totalAccessFeesCollected
   // zeroGasModeActive: boolean; // Artık kullanılmıyor
 }
 
@@ -65,7 +67,7 @@ export interface OptimizationResult {
   originalSize: number;
   optimizedSize: number;
   bytesSaved: number;
-  co2SavingsGrams: number;
+  co2AnalysisGrams: number; // co2SavingsGrams yerine co2AnalysisGrams
   efficiencyGainPct: number;
   proofHash: string;
   optimizedCode: string;

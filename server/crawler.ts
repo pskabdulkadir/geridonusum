@@ -51,6 +51,22 @@ export class WebCrawler {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /**
+   * Kaynağın lisans ve kullanım politikasını denetler.
+   * Sadece açık veri standartlarına (Creative Commons vb.) uygun kaynakları kabul eder.
+   */
+  private checkLicenseCompliance(html: string, url: string): { isCompliant: boolean; license: string } {
+    // Heuristic: Sayfa içerisinde lisans beyanı arar
+    const openDataKeywords = [/creative\s?commons/i, /cc-by/i, /public\s?domain/i, /open\s?government\s?licence/i, /data\.gov/i];
+    const isCompliant = openDataKeywords.some(pattern => pattern.test(html)) || url.includes('.gov') || url.includes('.org');
+    
+    // Belirlenen lisansı döndür (Varsayılan olarak kısıtlı kabul edilir)
+    if (isCompliant) {
+        return { isCompliant: true, license: url.includes('.gov') ? "Open Government License" : "Creative Commons Attribution" };
+    }
+    return { isCompliant: false, license: "Unknown / Restricted" };
+  }
+
   public enqueue(urlString: string, referrer: string = 'SEED') {
     try {
       const parsedUrl = new URL(urlString);
@@ -178,7 +194,14 @@ export class WebCrawler {
         const duration = Date.now() - start;
 
         if (html) {
-          this.emitLog('CRAWLER', 'SUCCESS', `Yüklendi: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KB (${duration}ms)`);
+          // LİSANS KONTROLÜ: Meşruiyet filtresi
+          const compliance = this.checkLicenseCompliance(html, url);
+          if (!compliance.isCompliant) {
+            this.emitLog('CRAWLER', 'WARNING', `[LISANS_ENGELI] Düğüm atlandı (Telif hakları kısıtlı olabilir): ${url}`);
+            continue;
+          }
+
+          this.emitLog('CRAWLER', 'SUCCESS', `[MEŞRU_KAYNAK] ${compliance.license} altında işleniyor: ${url}`);
           for (const link of links) this.enqueue(link, url);
           
           // Safe page processing

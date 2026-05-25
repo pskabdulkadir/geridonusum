@@ -18,7 +18,7 @@ export class BlockchainRouter {
   private isRealMode: boolean = false;
 
   private gasThresholds = {
-    polygon: "2.0", // MATIC/POL
+    polygon: "0.5", // MATIC/POL (Daha gerçekçi bir eşik)
     bsc: "0.005"   // BNB
   };
 
@@ -26,7 +26,7 @@ export class BlockchainRouter {
 
   // Mint function definition support including submitted CarbonHarvester contract requested by user
   private contractAbi = [
-    "function mintAndSwap(uint256 amount, string memory proof) public returns (bool)",
+    "function registerDataAsset(uint256 amount, string memory proof) public returns (bool)", // Mint yerine register
     "function submitProof(bytes32 proofHash, uint256 amount) external returns (bool)"
   ];
 
@@ -190,8 +190,8 @@ export class BlockchainRouter {
    * PROTOKOL_REAL: EIP-712 Standartlarında yapılandırılmış satış emri imzalar.
    * Bu imza, alıcı tarafından 'buyAsset' fonksiyonunda kullanılır.
    */
-  public async createSignedSaleOrder(itemId: string, co2SavingsGrams: number, price: number): Promise<string> {
-    this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Satış emri mühürleniyor: ${itemId}...`);
+  public async createSignedAccessVoucher(dataAssetId: string, co2AnalysisGrams: number, accessPrice: number): Promise<string> {
+    this.emitLog('BLOCKCHAIN', 'INFO', `[EIP-712] Veri erişim voucheri imzalanıyor: ${dataAssetId}...`);
     
     try {
       // Cüzdanı provider olmadan başlat (Signing işlemi için bağlantı gerekmez, noNetwork hatasını önler)
@@ -207,18 +207,18 @@ export class BlockchainRouter {
 
       // Veri Yapısı (Types)
       const types = {
-        AssetSale: [
+        DataAssetAccess: [ // AssetSale yerine DataAssetAccess
           { name: "id", type: "string" },
-          { name: "price", type: "uint256" },
-          { name: "seller", type: "address" }
+          { name: "accessFee", type: "uint256" }, // price yerine accessFee
+          { name: "publisher", type: "address" } // seller yerine publisher
         ]
       };
 
       // Veri (Value)
       const value = {
-        id: itemId,
-        price: ethers.utils.parseUnits(price.toFixed(18), 18), // Fiyatı Wei'ye çevir
-        seller: wallet.address
+        id: dataAssetId,
+        accessFee: ethers.utils.parseUnits(accessPrice.toFixed(18), 18), // Fiyatı Wei'ye çevir
+        publisher: wallet.address // seller yerine publisher
       };
 
       const signature = await wallet._signTypedData(domain, types, value);
@@ -226,7 +226,7 @@ export class BlockchainRouter {
       // AUDIT: İmza Geçerlilik Denetimi (EIP-712 Standardı)
       const recoveredAddress = ethers.utils.verifyTypedData(domain, types, value, signature);
       const isAuthentic = recoveredAddress.toLowerCase() === wallet.address.toLowerCase();
-      
+
       this.emitLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_OK] Mühür mülkiyeti doğrulandı: ${isAuthentic ? 'GEÇERLİ (VALID)' : 'GEÇERSİZ'}`);
       this.emitLog('BLOCKCHAIN', 'ANALYZE', `[TRACE] Recovered Signer: ${recoveredAddress.slice(0, 10)}...`);
       
@@ -248,7 +248,7 @@ export class BlockchainRouter {
   /**
    * Dispatches immutable parameters onto the target L2/Core blockchain network.
    */
-  public async submitGreenCreditProof(carbonGram: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
+  public async submitDataInsightProof(co2AnalysisGrams: number, proofHash: string): Promise<{ success: boolean; txHash: string; simulated: boolean; error?: string }> {
     this.emitLog('BLOCKCHAIN', 'INFO', `Blokzinciri ağ geçidi hazırlanıyor...`);
 
     let lastError: any = null;
@@ -282,9 +282,9 @@ export class BlockchainRouter {
         const isZeroContract = this.contractAddress === ethers.constants.AddressZero;
 
         if (isZeroContract) {
-          this.emitLog('BLOCKCHAIN', 'INFO', `Akıllı kontrat adresi belirtilmedi. Yeşil karbon kanıtı doğrudan Polygon üzerinde mühürleniyor (Memo mod)...`);
+          this.emitLog('BLOCKCHAIN', 'INFO', `Akıllı kontrat adresi belirtilmedi. Veri analitiği kanıtı doğrudan Polygon üzerinde mühürleniyor (Memo mod)...`);
 
-          const memoMessage = `CARBON_PROOF:${proofHash}:${carbonGram.toFixed(4)}_CO2_g`;
+          const memoMessage = `DATA_INSIGHT_PROOF:${proofHash}:${co2AnalysisGrams.toFixed(4)}_CO2_g_ANALYSIS`;
           const memoBytes = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(memoMessage));
 
           const tx = await wallet.sendTransaction({
@@ -294,7 +294,7 @@ export class BlockchainRouter {
             gasLimit: 30000
           });
 
-          this.emitLog('BLOCKCHAIN', 'INFO', `Kanıt işlemi ağa başarıyla iletildi. Blok onayı bekleniyor... İşlem Kodu: ${tx.hash}`);
+          this.emitLog('BLOCKCHAIN', 'INFO', `Veri analitiği kanıt işlemi ağa başarıyla iletildi. Blok onayı bekleniyor... İşlem Kodu: ${tx.hash}`);
           const receipt = await tx.wait();
 
           this.emitLog('BLOCKCHAIN', 'SUCCESS', `${receipt.blockNumber} numaralı blok onaylandı. Yeşil Karbon proof kaydı blok zincirine eklendi. Harcanan Gas: ${receipt.gasUsed.toString()}`);
@@ -307,15 +307,15 @@ export class BlockchainRouter {
         } else {
           // Contract execution
           const contract = new ethers.Contract(this.contractAddress, this.contractAbi, wallet);
-          // Veriyi kontratın beklediği birime (18 decimal) çevir
-          const amountWei = ethers.utils.parseUnits(carbonGram.toFixed(18), 18);
+          // Analiz değerini kontratın beklediği birime (18 decimal) çevir
+          const amountWei = ethers.utils.parseUnits(co2AnalysisGrams.toFixed(18), 18);
 
-          this.emitLog('BLOCKCHAIN', 'INFO', `Temizlik kanıtı işlemi akıllı kontrat üzerinde başlatılıyor...`);
+          this.emitLog('BLOCKCHAIN', 'INFO', `Veri analitiği kanıt işlemi akıllı kontrat üzerinde başlatılıyor...`);
           
           let tx;
           try {
-            this.emitLog('BLOCKCHAIN', 'INFO', `Deneme 1: mintAndSwap fonksiyonu çağrılıyor...`);
-            tx = await contract.mintAndSwap(amountWei, proofHash, {
+            this.emitLog('BLOCKCHAIN', 'INFO', `Deneme 1: registerDataAsset fonksiyonu çağrılıyor...`);
+            tx = await contract.registerDataAsset(amountWei, proofHash, {
               gasLimit: 150000
             });
           } catch (firstErr: any) {
@@ -332,7 +332,7 @@ export class BlockchainRouter {
             }
             
             // submitProof (bytes32 proofHash, uint256 amount)
-            tx = await contract.submitProof(bytes32Proof, amountWei, {
+            tx = await contract.submitProof(bytes32Proof, amountWei, { // submitProof hala geçerli
               gasLimit: 150000
             });
           }
@@ -340,7 +340,7 @@ export class BlockchainRouter {
           this.emitLog('BLOCKCHAIN', 'INFO', `Ağa başarıyla iletildi. Blok onayı bekleniyor... İşlem Kodu: ${tx.hash}`);
           const receipt = await tx.wait();
 
-          this.emitLog('BLOCKCHAIN', 'SUCCESS', `${receipt.blockNumber} numaralı blok onaylandı. Yeşil kredi takas edildi ve kaydedildi. Harcanan Gas: ${receipt.gasUsed.toString()}`);
+          this.emitLog('BLOCKCHAIN', 'SUCCESS', `${receipt.blockNumber} numaralı blok onaylandı. Veri analitiği kaydı blok zincirine eklendi. Harcanan Gas: ${receipt.gasUsed.toString()}`);
 
           return {
             success: true,
