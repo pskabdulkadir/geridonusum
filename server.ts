@@ -39,8 +39,13 @@ export const mainCrawler = new WebCrawler({
   targetLimit: 999999
 });
 
-// --- WEB3 FİNANSAL KONFİGÜRASYON ---
-const payoutWallet = blockchainConfig.payoutWallet; // 0x02cc8aBB...33e4 (config.ts'den çekilir)
+// --- SAF WEB3 FİNANSAL YAPILANDIRMA ---
+// Binance ve ccxt gibi merkezi borsa kalıntıları tamamen imha edildi.
+const web3Config = {
+    payoutWallet: process.env.PAYOUT_WALLET || blockchainConfig.payoutWallet || "0x02cc8aBBADf0ad5183f5e9Bb2BF469e506a133e4",
+    rpcUrl: process.env.RPC_URL || "https://polygon-rpc.com",
+    contractAddress: process.env.CONTRACT_ADDRESS || blockchainConfig.contractAddress
+};
 
 // 1. HEDEF BELİRLEME (Seed URLs)
 const crawlerSeeds = [
@@ -105,7 +110,7 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
         serverState.totalRealizedCash += settledAmount;
 
         // GÜNCEL SATIŞ ARZI LOGU
-        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${payoutWallet}`);
+        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${web3Config.payoutWallet}`);
         
         // Nakit akışını Google Sheets'e işle
         await logToGreenLedger({
@@ -113,7 +118,7 @@ async function mutabakatMotoru(assetId: string, krediDegeri: number) {
             assetId: assetId,
             profitUsdt: settledAmount.toFixed(4),
             status: "REALIZED_CASH",
-            payoutAddress: payoutWallet
+            payoutAddress: web3Config.payoutWallet
         });
     } catch (error: any) {
         pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
@@ -434,18 +439,22 @@ async function broadcastToAllMarkets(item: any) {
  * 2. ADIM: Satış Emri Tetikleyici (Ticaret Motoru Entegrasyonu)
  */
 async function executeBatchTrade() {
-  if (serverState.batchVolumeAccumulatedKB >= 512000) {
-      pushLog('GREEN_FINANCE', 'SUCCESS', `[KOTA_DOLDU] 500 MB veri paketi mühürlendi. Global Settlement başlatılıyor.`);
-      
-      const assetId = `BATCH_EXPORT_${Date.now()}`;
-      const kiloBytes = serverState.batchVolumeAccumulatedKB;
+    // 500 MB sınırı (512,000 KB) dolduğunda devreye girer
+    if (serverState.batchVolumeAccumulatedKB >= 512000) {
+        pushLog('GREEN_FINANCE', 'SUCCESS', `[CANLI_İHRACAT] 500 MB limit doldu. Global Ocean Network'e gönderiliyor...`);
+        
+        // Burada sadece Blockchain Settlement tetiklenir
+        await performBlockchainSettlement(); 
+        
+        serverState.batchVolumeAccumulatedKB = 0; // Döngü sıfırlandı
+    }
+}
 
-      // SAF DÖNGÜ TETİKLEYİCİSİ: Mint -> Export -> Settle
-      await darphaneMotoru(assetId, kiloBytes);
-
-      serverState.batchVolumeAccumulatedKB = 0;
-      pushLog('GREEN_FINANCE', 'SUCCESS', `[DÖNGÜ_RESET] Yeni üretim bloğu için sayaç sıfırlandı.`);
-  }
+async function performBlockchainSettlement() {
+    const assetId = `BATCH_EXPORT_${Date.now()}`;
+    const kiloBytes = serverState.batchVolumeAccumulatedKB;
+    // Mevcut darphane motoru üzerinden zincir üstü kaydı gerçekleştir
+    await darphaneMotoru(assetId, kiloBytes);
 }
 
 /**
