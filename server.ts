@@ -357,15 +357,15 @@ const ReadyToSellSchema = new mongoose.Schema({
   id: String,
   url: String,
   proofHash: String,
-  co2SavingsGrams: Number,
+  co2AnalysisGrams: Number, // co2SavingsGrams -> co2AnalysisGrams
   extractedKeywords: [String],
   reportSummary: String,
-  accessPriceUSD: Number,
+  accessPriceUSD: Number, 
   isSold: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
   accessVoucherSignature: String,
   publisherAddress: String,
-  accessPriceWei: String // Kontrat için hassas fiyat verisi
+  accessPriceWei: String 
 });
 
 TransactionSchema.index({ timestamp: -1 });
@@ -674,7 +674,7 @@ async function runRecyclingMining() {
         id: generatedId,
         url,
         proofHash,
-        co2SavingsGrams: metric.co2SavingsGrams,
+        co2AnalysisGrams: metric.co2SavingsGrams,
         extractedKeywords: ["recyclable", "dark-data", "carbon-offset"],
         reportSummary: `STRÜKTÜREL GERİ DÖNÜŞÜM: ${url} düğümü başarıyla optimize edildi.`,
         accessPriceUSD: valuation,
@@ -798,10 +798,10 @@ app.get("/api/stats", async (req, res) => {
       optimizedSizeTotal: serverState.optimizedSizeTotal,
       totalKiloBytesSaved: serverState.totalKiloBytesSaved, 
       totalCo2SavedGrams: serverState.totalCo2SavedGrams,
-      dataAssetRegistrations: blockchainProofsMinted,
+      dataAssetRegistrations: blockchainProofsMinted, 
       transactions: transactions,
       visitedUrls: Array.from(serverState.visitedUrls),
-      totalEarnings: totalEarnings,
+      totalServiceFeesCollected: totalEarnings, // totalEarnings -> totalServiceFeesCollected
       isCrawling: serverState.isCrawling,
       currentCrawlingUrl: serverState.currentCrawlingUrl,
       readyToSell: readyToSell,
@@ -810,8 +810,8 @@ app.get("/api/stats", async (req, res) => {
       autonomousMode: serverState.autonomousMode,
       commitThreshold: serverState.commitThreshold,
       contractAddress: blockchainConfig.contractAddress,
-      totalGreenCredits: serverState.totalGreenCredits,
-      totalRealizedCash: serverState.totalRealizedCash
+      totalDataInsightsPublished: serverState.totalGreenCredits, // totalGreenCredits -> totalDataInsightsPublished
+      totalAccessFeesCollected: serverState.totalRealizedCash // totalRealizedCash -> totalAccessFeesCollected
     } as CoreStats);
   } catch (err: any) {
     console.error("[API_ERROR] /api/stats failed:", err);

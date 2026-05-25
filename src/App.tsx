@@ -51,8 +51,10 @@ export default function App() {
     currentCrawlingUrl: "",
     readyToSell: [],
     payoutWalletAddress: "", // Will be fetched from /api/stats
-    totalDataInsightsPublished: 0, // Yayınlanan veri analitiği raporu sayısı
-    totalAccessFeesCollected: 0, // Tahsil edilen gerçek nakit (Veri Erişim Ücretleri)
+    totalDataInsightsPublished: 0,
+    totalAccessFeesCollected: 0,
+    totalServiceFeesCollected: 0, // Eksik alan eklendi
+    contractAddress: ""
   }); // zeroGasModeActive kaldırıldı
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -80,7 +82,7 @@ export default function App() {
   } | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
 
-  const totalEarnings = stats.totalEarnings || 0; // Toplam kazanç
+  const totalEarnings = stats.totalServiceFeesCollected || 0; // totalEarnings -> totalServiceFeesCollected
 
   // Sync state values to form inputs
   useEffect(() => {
@@ -253,7 +255,7 @@ export default function App() {
   // Gerçek bir alıcının karbon veri paketini satın almasını tetikle (Manuel Payout)
   const handleExecutePayout = async (itemId: string) => {
     const item = stats.readyToSell.find(i => i.id === itemId);
-    if (!item || !item.accessVoucherSignature) {
+    if (!item || !item.signature) {
       alert("Varlık imzası (Voucher) bulunamadı. Lütfen otonom motorun imzalamasını bekleyin.");
       return;
     }
@@ -287,7 +289,7 @@ export default function App() {
       const signer = provider.getSigner();
       
       // Alıcı gas ücretini ödeyerek kontratı tetikler
-      console.log("Buyer is executing claim for signature:", item.accessVoucherSignature);
+      console.log("Buyer is executing claim for signature:", item.signature);
       
       // GERÇEK SATIN ALIM: Voucher imzasını doğrula ve ödemeyi gerçekleştir
       const contractAddress = stats.contractAddress; 
@@ -298,10 +300,10 @@ export default function App() {
       ];
       
       const contract = new ethers.Contract(contractAddress, contractAbi, signer);
-      const priceWei = ethers.utils.parseUnits((item.accessPriceUSD || 0).toFixed(18), 18);
+      const priceWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18);
 
       // Gas-on-Purchase: İşlemi alıcı (MetaMask sahibi) başlatır ve gas'ı öder.
-      const tx = await contract.buyAsset(item.id, priceWei, item.accessVoucherSignature, {
+      const tx = await contract.buyAsset(item.id, priceWei, item.signature, {
         value: priceWei // Alıcı parayı kontrata gönderir, kontrat sana iletir
       });
 
@@ -487,7 +489,7 @@ export default function App() {
           </div>
           <div className="mt-4">
             <div className="text-2xl md:text-3xl font-display font-medium text-pink-400 tracking-tight">
-              {stats.dataAssetRegistrations} <span className="text-xs font-mono text-slate-400">Varlık</span>
+              {(stats.dataAssetRegistrations || 0)} <span className="text-xs font-mono text-slate-400">Varlık</span>
             </div>
             <p className="text-slate-500 text-[10px] mt-1">L2 üzerinde gerçekleşen PoC işlemleri</p>
           </div>
@@ -650,7 +652,7 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-400">
                           <div>
                             <span className="text-slate-500 uppercase text-[9px] block">CO₂ Analiz Değeri</span>
-                            <span className="text-amber-400 text-xs font-semibold">{tx.co2AnalysisGrams.toFixed(4)} g CO₂</span>
+                            <span className="text-amber-400 text-xs font-semibold">{(tx.co2AnalysisGrams || 0).toFixed(4)} g CO₂</span>
                           </div>
                           <div>
                             <span className="text-slate-500 uppercase text-[9px] block text-right">Doğrulama Damgası</span>
@@ -939,7 +941,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="text-3xl md:text-4xl font-display font-medium text-emerald-400 tracking-tight">
-                  ${stats.totalAccessFeesCollected.toFixed(4)} <span className="text-sm font-mono text-slate-500">USD</span>
+                  ${(stats.totalAccessFeesCollected || 0).toFixed(4)} <span className="text-sm font-mono text-slate-500">USD</span>
                 </div>
                 <div className="mt-2 text-[11px] font-mono text-emerald-500/80 flex items-center justify-end gap-2 border-t border-slate-900 pt-2">
                    <span>Yayınlanan Rapor:</span>
@@ -1262,7 +1264,7 @@ export default function App() {
                                 <span className="font-mono text-[10px] text-slate-500 max-w-[150px] sm:max-w-[200px] truncate select-all">{item.url}</span>
                               </div>
                               <div className="flex items-center gap-2 font-mono">
-                                <span className="text-xs font-bold text-emerald-400">${item.accessPriceUSD.toFixed(2)} USDT</span>
+                                <span className="text-xs font-bold text-emerald-400">${(item.accessPriceUSD || 0).toFixed(2)} USDT</span>
                                 {item.isSold ? (
                                   <span className="bg-slate-800 text-slate-400 border border-slate-700 rounded px-2 py-0.5 text-[10px] uppercase">✓ GELİR YÖNLENDİRİLDİ</span>
                                 ) : (
@@ -1288,7 +1290,7 @@ export default function App() {
                                 ))}
                               </div>
                               <span className="text-slate-600 text-[9px]">                                
-                                CO2 Analizi: <strong className="text-slate-400">{item.co2AnalysisGrams.toFixed(3)}g</strong> | Kanıt Hash: <span className="text-slate-500 text-[8px] select-all font-mono">{item.proofHash.substring(0, 16)}...</span>
+                                CO2 Analizi: <strong className="text-slate-400">{(item.co2AnalysisGrams || 0).toFixed(3)}g</strong> | Kanıt Hash: <span className="text-slate-500 text-[8px] select-all font-mono">{(item.proofHash || "").substring(0, 16)}...</span>
                               </span>
                             </div>
                           </div>
