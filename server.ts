@@ -470,45 +470,45 @@ async function checkMarketOpportunity() {
   };
 }
 
-async function broadcastToNetwork(itemId: string) {
+async function signDataAssetAccessVoucher(dataAssetId: string) {
   try {
-    const item = await ReadyToSellModel.findOne({ id: itemId });
+    const item = await ReadyToSellModel.findOne({ id: dataAssetId });
     if (!item) return;
 
     // PROTOKOL_REAL: Gas ücreti ödemeden kriptografik imza (Voucher) oluştur
-    const signature = await mainBlockchain.createSignedSaleOrder(
-      itemId, 
-      item.co2SavingsGrams, 
-      item.marketPriceUSD
+    const signature = await mainBlockchain.createSignedAccessVoucher(
+      dataAssetId, 
+      item.co2AnalysisGrams || 0, 
+      item.accessPriceUSD || 0
     );
     
     const sellerAddress = mainBlockchain.getWalletAddress();
 
     if (signature && sellerAddress) {
-      const valuationWei = ethers.utils.parseUnits(item.marketPriceUSD.toFixed(18), 18).toString();
-      const priceFormatted = item.marketPriceUSD.toFixed(4);
+      const valuationWei = ethers.utils.parseUnits((item.accessPriceUSD || 0).toFixed(18), 18).toString();
+      const priceFormatted = (item.accessPriceUSD || 0).toFixed(4);
 
-      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${itemId} için $${priceFormatted} USDT mühürlendi.`);
-      await ReadyToSellModel.updateOne({ id: itemId }, { 
-        signature: signature,
-        sellerAddress: sellerAddress,
-        valuationWei: valuationWei
+      pushLog('BLOCKCHAIN', 'INFO', `[EIP-712] ${dataAssetId} için $${priceFormatted} USDT erişim bedeli mühürlendi.`);
+      await ReadyToSellModel.updateOne({ id: dataAssetId }, { 
+        accessVoucherSignature: signature,
+        publisherAddress: sellerAddress,
+        accessPriceWei: valuationWei
       });
-      pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${itemId} için kriptografik satış emri mühürlendi. Alıcı bekleniyor.`);
+      pushLog('BLOCKCHAIN', 'SUCCESS', `[VOUCHER_CREATED] ${dataAssetId} için kriptografik erişim voucheri mühürlendi. Alıcı bekleniyor.`);
 
       // PROTOKOL_EXPORT: Varlığı tüm pazar yeri kanallarına aynı anda ihraç et
       await broadcastToAllMarkets({
-        id: itemId,
-        signature: signature,
-        price: item.marketPriceUSD,
-        sellerAddress: sellerAddress,
-        valuationWei: valuationWei
+        id: dataAssetId,
+        accessVoucherSignature: signature,
+        accessPrice: item.accessPriceUSD,
+        publisherAddress: sellerAddress,
+        accessPriceWei: valuationWei
       });
     } else {
       throw new Error("Cüzdan yetkilendirme hatası.");
     }
   } catch (err: any) {
-    pushLog('BLOCKCHAIN', 'ERROR', `[SIGN_FAILED] ${err.message}`);
+    pushLog('BLOCKCHAIN', 'ERROR', `[VOUCHER_SIGN_FAILED] ${err.message}`);
   }
 }
 
