@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "axios": "^1.16.1",
+    "ccxt": "^4.4.52",
     "cheerio": "^1.2.0",
     "dotenv": "^17.2.3",
     "ethers": "^5.7.2",

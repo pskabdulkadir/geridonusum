@@ -12,6 +12,7 @@ import express from "express";
 import path from "path";
 import axios from "axios";
 import { ethers } from "ethers";
+import ccxt from "ccxt";
 import { createServer as createViteServer } from "vite";
 import * as dotenv from "dotenv";
 
@@ -76,7 +77,7 @@ const serverState = {
 };
 
 // 1. ADIM: Ticaret Motorunun "Karar Mekanizması"
-const ticaretMotoru = {
+const kararMotoru = {
     hedefKotaMB: blockchainConfig.batchTradeThresholdMB,
     
     // Bakiyeyi kontrol et (API entegrasyonu hazırlığı)
@@ -98,6 +99,28 @@ const ticaretMotoru = {
         }
     }
 };
+
+// --- TİCARET MOTORU BAŞLANGICI (BINANCE ENTEGRASYONU) ---
+const exchange = new ccxt.binance({
+    apiKey: process.env.BINANCE_API_KEY,
+    secret: process.env.BINANCE_SECRET,
+    enableRateLimit: true,
+});
+
+async function ticaretMotoru(sembol: string = 'BTC/USDT', miktar: number) {
+    try {
+        pushLog('MARKET', 'INFO', `[TİCARET] İşlem başlatılıyor: ${sembol}, Miktar: ${miktar}`);
+        
+        // Piyasa fiyatından satış emri gönder
+        const order = await exchange.createMarketSellOrder(sembol, miktar);
+        
+        pushLog('MARKET', 'SUCCESS', `[TİCARET] BAŞARILI: Satış gerçekleşti. Order ID: ${order.id}`);
+        return order;
+    } catch (error: any) {
+        pushLog('MARKET', 'ERROR', `[TİCARET] HATA: İşlem yapılamadı. Detay: ${error.message}`);
+    }
+}
+// --- TİCARET MOTORU BİTİŞİ ---
 
 // --- MONGODB MODELLERİ (GERÇEK VERİ İÇİN) ---
 const TransactionSchema = new mongoose.Schema({
@@ -299,8 +322,11 @@ async function broadcastToAllMarkets(item: any) {
             if (channel.name === "GoogleSheets") {
                 const msg = item.type === "CASH_FLOW" ? "Nakit akışı raporu işlendi." : "Veri aktarım sinyali gönderildi.";
                 pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${msg} (Google Sheets).`);
+                // Sadece gerçek varlık ihracatında ticaret tetikle (Raporlarda tetikleme)
+                if (item.type !== "CASH_FLOW") await ticaretMotoru('BTC/USDT', 0.001);
             } else {
                 pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
+                await ticaretMotoru('BTC/USDT', 0.001);
             }
             
         } catch (err: any) {
@@ -316,7 +342,7 @@ async function broadcastToAllMarkets(item: any) {
  */
 async function executeBatchTrade() {
   // Karar motorunu sorgula
-  if (ticaretMotoru.kararVer(serverState.batchVolumeAccumulatedKB)) {
+  if (kararMotoru.kararVer(serverState.batchVolumeAccumulatedKB)) {
       pushLog('MARKET', 'SUCCESS', `[EXECUTING_TRADE] Borsa emirleri otonom olarak iletiliyor...`);
       
       const simulatedPrice = 65000 + Math.random() * 1000; 
