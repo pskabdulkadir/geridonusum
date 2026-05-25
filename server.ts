@@ -109,25 +109,25 @@ const serverState = {
 
 /**
  * --- GERÇEK FİNANSAL MUTABAKAT MOTORU ---
- * Sistemin ürettiği kanıtı doğrudan finansal sisteme "nakit" olarak tanıtır.
+ * Sistemin ürettiği veri analitiği kanıtını pazar yeri protokollerine mühürler.
  */
-async function mutabakatMotoru(assetId: string, krediDegeri: number) {
+async function insightLogisticsEngine(assetId: string, dataInsightValue: number) {
     try {
         // 1. ADIM: Dijital Kanıtı (Proof) Finansal Protokole Hazırla
         const proofOfCleansing = {
             id: assetId,
             timestamp: Date.now(),
-            value: krediDegeri,
-            status: "PENDING_SETTLEMENT",
-            protocol: "GREEN_FINANCE_v1",
+            value: dataInsightValue,
+            status: "PENDING_REGISTRATION",
+            protocol: "DATA_LOGISTICS_v1",
         };
 
         // 2. ADIM: Yayın Kuyruğuna Ekle (Fire-and-Forget / Non-blocking)
         publishQueue.push(proofOfCleansing);
         
         // 3. ADIM: Kuyruğa Ekle (Async Isolation)
-        settlementQueue.push({ assetId, creditValue: krediDegeri });
-        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${assetId} mutabakat kuyruğuna eklendi.`);
+        settlementQueue.push({ assetId, creditValue: dataInsightValue });
+        pushLog('FINANCE', 'INFO', `[QUEUE_PUSH] ${assetId} lojistik kuyruğuna eklendi.`);
     } catch (error: any) {
         pushLog('FINANCE', 'ERROR', `[PROTOKOL_HATASI] ${error.message}`);
     }
@@ -139,14 +139,14 @@ async function processSettlementQueue() {
     if (!task) return;
 
     try {
-        const settledAmount = await finalizeFinancialSettlement({ id: task.assetId, value: task.creditValue });
+        const settledAmount = await finalizeDataAssetAccess({ id: task.assetId, value: task.creditValue });
         serverState.totalRealizedCash += settledAmount;
         // GÜNCEL SATIŞ ARZI LOGU
-        pushLog('MARKET', 'SUCCESS', `[SATIŞ_ARZI] ID: VERI_SATISI | Arz Edilen Değer: ${settledAmount.toFixed(4)} USDT. Settlement Adresi: ${web3Config.payoutWallet}`);
+        pushLog('MARKET', 'SUCCESS', `[ACCESS_FEE_COLLECTED] ID: ${task.assetId} | Tahsil Edilen Erişim Ücreti: ${settledAmount.toFixed(4)} USDT.`);
         
         // Nakit akışını Google Sheets'e işle
-        await logToGreenLedger({
-            type: "LIQUIDITY_SETTLEMENT",
+        await logDataAssetActivity({
+            type: "SERVICE_FEE_REPORT",
             assetId: task.assetId,
             profitUsdt: settledAmount.toFixed(4),
             status: "REALIZED_CASH",
@@ -295,7 +295,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
   }
 }
 
-async function finalizeFinancialSettlement(proof: any): Promise<number> {
+async function finalizeDataAssetAccess(proof: any): Promise<number> {
     // Alıcının (veri merkezi/bulut sağlayıcısı) kanıtı onayladığı ve parayı gönderdiği an.
     // Gerçek modda API'den dönen 'creditedAmount' değerini döndürür.
     return proof.value * 0.98; // Borsa ve ağ komisyonları düşülmüş net nakit
@@ -303,40 +303,40 @@ async function finalizeFinancialSettlement(proof: any): Promise<number> {
 
 // --- İNSANSIZ DARPHANE MOTORU (YEŞİL FİNANS ÇEKİRDEĞİ) ---
 // Amaç: Dijital atığı "Yeşil Kredi"ye dönüştürmek
-async function darphaneMotoru(assetId: string, kiloByte: number) {
+async function processDataInsight(assetId: string, kiloByte: number) {
     try {
         // 1. ADIM: DİJİTAL KANIT ÜRETİMİ (Proof of Data Cleansing)
-        const karbonKredisi = (kiloByte * 0.00045).toFixed(8);
+        const insightValue = (kiloByte * 0.00045).toFixed(8);
         
-        pushLog('FINANCE', 'INFO', `[DARPHANE_PROCESS] ${assetId} kodlu veri temizlendi. Finansal değer mühürleniyor...`);
+        pushLog('FINANCE', 'INFO', `[INSIGHT_ANALYSIS] ${assetId} kodlu veri rafine edildi. Analitik değer hesaplanıyor...`);
 
         // 2. ADIM: YEŞİL FİNANS BORSASINA/LEDGER'A İMZALI KAYIT
-        const finansalKayit = {
-            type: "GREEN_CREDIT_MINT",
-            creditValue: karbonKredisi,
+        const dataRecord = {
+            type: "DATA_INSIGHT_INDEX",
+            creditValue: insightValue,
             assetRef: assetId,
             timestamp: new Date().toISOString()
         };
 
         // Bu veri artık borsalara akıtılmaya hazır "Varlık"tır.
-        await logToGreenLedger(finansalKayit);
+        await logDataAssetActivity(dataRecord);
 
         // 3. ADIM: OTONOM ÖDÜLLENDİRME
-        serverState.totalGreenCredits += parseFloat(karbonKredisi);
+        serverState.totalGreenCredits += parseFloat(insightValue);
         
-        pushLog('FINANCE', 'SUCCESS', `[CREDIT_CALCULATED] +${karbonKredisi} Yeşil Kredi hesaplandı. Toplam Varlık: ${serverState.totalGreenCredits.toFixed(4)}`);
+        pushLog('FINANCE', 'SUCCESS', `[VALUE_INDEXED] +${insightValue} Analiz Birimi doğrulandı. Biriken Hacim: ${serverState.totalGreenCredits.toFixed(4)}`);
 
         // PROTOKOL_SETTLEMENT: Kredi basıldıktan sonra anında gerçek nakit mutabakatını çalıştır
-        await mutabakatMotoru(assetId, parseFloat(karbonKredisi));
+        await insightLogisticsEngine(assetId, parseFloat(insightValue));
     } catch (error: any) {
-        pushLog('FINANCE', 'ERROR', `[DARPHANE_KRİTİK_HATA] ${error.message}`);
+        pushLog('FINANCE', 'ERROR', `[LOGISTICS_CORE_ERROR] ${error.message}`);
     }
 }
 
-async function logToGreenLedger(data: any) {
+async function logDataAssetActivity(data: any) {
     const report = {
         ...data,
-        protocol: "GREEN_FINANCE_v1",
+        protocol: "DATA_LOGISTICS_v1",
         timestamp: new Date().toISOString()
     };
     
@@ -519,14 +519,12 @@ async function signDataAssetAccessVoucher(dataAssetId: string) {
 async function broadcastToAllMarkets(item: any) {
     const channels = [
         { name: "OceanProtocol", url: blockchainConfig.oceanProtocolUrl },
-        { name: "CustomMarket", url: blockchainConfig.marketplaceApiUrl },
         { name: "Middleware (Make.com)", url: blockchainConfig.middlewareWebhookUrl },
         { name: "GoogleSheets", url: blockchainConfig.googleSheetsUrl }
     ].filter(c => 
         c.url && 
-        !c.url.includes('your-webhook-id') && 
-        !c.url.includes('api.gercek-veri-borsasi.com') &&
-        !c.url.includes('ocean.api')
+        !c.url.includes('your-webhook-id') &&
+        !c.url.includes('ocean.api') // Eski v4 uç noktaları filtrelenir
     );
 
     if (channels.length === 0) {
@@ -592,7 +590,7 @@ async function performBlockchainSettlement() {
     const assetId = `BATCH_EXPORT_${Date.now()}`;
     const kiloBytes = serverState.batchVolumeAccumulatedKB;
     // Mevcut darphane motoru üzerinden zincir üstü kaydı gerçekleştir
-    await darphaneMotoru(assetId, kiloBytes);
+    await processDataInsight(assetId, kiloBytes);
 }
 
 /**

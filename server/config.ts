@@ -31,7 +31,7 @@ export const blockchainConfig = {
     useAiAnalysis: process.env.USE_AI_ANALYSIS === 'true',
     sharedPoolEnabled: process.env.SHARED_DISTRIBUTION_POOL_ENABLED === 'true',
     batchMining: process.env.BATCH_MINING === 'true',
-    marketplaceApiUrl: process.env.MARKETPLACE_API_URL || 'https://api.data-analytics-hub.com/v1/list', // Dış veri pazar yerinin API adresi
+    marketplaceApiUrl: process.env.MARKETPLACE_API_URL || '', // Geçersiz domain temizlendi
     oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/data-assets', // Ocean Protocol veri varlığı API adresi
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
     openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
