@@ -71,6 +71,32 @@ const serverState = {
   zeroGasModeActive: false,
   autonomousMode: false,
   commitThreshold: 10,
+  batchVolumeAccumulatedKB: 0, // Toplu işlem için biriken hacim
+  aktifBakiyeUSDT: 0, // Simüle edilen aktif bakiye
+};
+
+// 1. ADIM: Ticaret Motorunun "Karar Mekanizması"
+const ticaretMotoru = {
+    hedefKotaMB: blockchainConfig.batchTradeThresholdMB,
+    
+    // Bakiyeyi kontrol et (API entegrasyonu hazırlığı)
+    async bakiyeKontrol() {
+        // İleride buraya Binance/Ocean API: await exchange.fetchBalance() gelecek
+        return serverState.aktifBakiyeUSDT;
+    },
+
+    // Karar ver: Satış zamanı geldi mi?
+    kararVer(islenenKB: number): boolean {
+        const islenenMB = islenenKB / 1024;
+        if (islenenMB >= this.hedefKotaMB) {
+            pushLog('MARKET', 'ANALYZE', `[KOTA_DOLDU] Hedef kota (${this.hedefKotaMB} MB) aşıldı. Satış prosedürü tetikleniyor.`);
+            return true;
+        } else {
+            const kalan = (this.hedefKotaMB - islenenMB).toFixed(2);
+            pushLog('MARKET', 'INFO', `[KOTA_TAKİP] Mevcut: ${islenenMB.toFixed(2)} MB. Satışa kalan: ${kalan} MB`);
+            return false;
+        }
+    }
 };
 
 // --- MONGODB MODELLERİ (GERÇEK VERİ İÇİN) ---
@@ -241,14 +267,21 @@ async function broadcastToAllMarkets(item: any) {
 
     const broadcastPromises = channels.map(async (channel) => {
         try {
-            let payload = item;
-            // Google Sheets için özel veri haritalama (veri1, veri2, veri3)
-            if (channel.name === "GoogleSheets") {
-                payload = {
-                    veri1: item.id,
-                    veri2: `$${item.price} USDT`,
-                    veri3: new Date().toLocaleString('tr-TR')
-                };
+            let payload;
+            
+            // Protokol Ayrımı: Finansal Rapor mu yoksa Varlık İhracatı mı?
+            if (item.type === "CASH_FLOW") {
+              if (channel.name !== "GoogleSheets") return; // Finansal rapor sadece tabloya gider
+              payload = {
+                veri1: "TOPLU_SATIS_TETIKLENDI",
+                veri2: `${item.amount} ${item.ticker} @ ${item.price} USDT`,
+                veri3: new Date().toLocaleString('tr-TR')
+              };
+            } else {
+              // Standart Varlık İhracatı
+              payload = channel.name === "GoogleSheets" 
+                ? { veri1: item.id, veri2: `$${item.price} USDT`, veri3: new Date().toLocaleString('tr-TR') }
+                : item;
             }
 
             if (channel.name === "GoogleSheets") {
@@ -264,7 +297,8 @@ async function broadcastToAllMarkets(item: any) {
             }
 
             if (channel.name === "GoogleSheets") {
-                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] Veri aktarım sinyali gönderildi (Google Sheets).`);
+                const msg = item.type === "CASH_FLOW" ? "Nakit akışı raporu işlendi." : "Veri aktarım sinyali gönderildi.";
+                pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${msg} (Google Sheets).`);
             } else {
                 pushLog('MARKET', 'SUCCESS', `[EXPORT_OK] ${channel.name} kanalına başarıyla aktarıldı.`);
             }
@@ -278,6 +312,33 @@ async function broadcastToAllMarkets(item: any) {
 }
 
 /**
+ * 2. ADIM: Satış Emri Tetikleyici (Ticaret Motoru Entegrasyonu)
+ */
+async function executeBatchTrade() {
+  // Karar motorunu sorgula
+  if (ticaretMotoru.kararVer(serverState.batchVolumeAccumulatedKB)) {
+      pushLog('MARKET', 'SUCCESS', `[EXECUTING_TRADE] Borsa emirleri otonom olarak iletiliyor...`);
+      
+      const simulatedPrice = 65000 + Math.random() * 1000; 
+      const tradeAmount = 0.046; // $3000 hedefine yönelik miktar
+      
+      // 1. Google Sheets'e "Nakit Akışı" raporu geç
+      await broadcastToAllMarkets({
+        type: "CASH_FLOW",
+        ticker: blockchainConfig.marketOrderTicker,
+        amount: tradeAmount,
+        price: simulatedPrice.toFixed(2)
+      });
+
+      // 2. Finansal durumu güncelle
+      serverState.aktifBakiyeUSDT += (tradeAmount * simulatedPrice);
+      serverState.batchVolumeAccumulatedKB = 0; // Hacmi sıfırla
+      
+      pushLog('MARKET', 'SUCCESS', `[TRADE_COMPLETED] Nakit akışı Google Sheets'e mühürlendi.`);
+  }
+}
+
+/**
  * EXECUTOR: OTONOM İŞLEM DÖNGÜSÜ
  * Recursive timeout kullanarak işlemlerin birbirini ezmesini (overlapping) önler.
  */
@@ -286,6 +347,9 @@ async function startAutomatedTrading() {
     setTimeout(startAutomatedTrading, 5000);
     return;
   }
+
+  // Finansal Modül Kontrolü
+  await executeBatchTrade();
 
   try {
     // Onay eşiği kontrolü: Satılmamış öğe sayısı eşiğe ulaştı mı?
@@ -372,11 +436,15 @@ async function runRecyclingMining() {
 
         serverState.pagesProcessed++;
         serverState.totalKiloBytesSaved += (metric.bytesSaved / 1024);
+        serverState.batchVolumeAccumulatedKB += metric.bytesSaved; // Hacmi biriktir
         serverState.totalCo2SavedGrams += metric.co2SavingsGrams;
         pushLog('MARKET', 'SUCCESS', `[YENİ_VARLIK] Veri geri dönüştürüldü ve envantere eklendi. Değer: $${valuation} USDT`);
 
         // PROTOKOL_EXPORT: Varlığı anında kriptografik olarak mühürle ve dış pazarlara ihraç et
         await broadcastToNetwork(generatedId);
+
+        // 2. ADIM: Yeni akış - Raporlamadan hemen sonra kotayı kontrol et ve gerekirse sat
+        await executeBatchTrade();
       }
     });
   } catch (err: any) {

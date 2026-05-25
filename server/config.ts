@@ -35,7 +35,10 @@ export const blockchainConfig = {
     oceanProtocolUrl: process.env.OCEAN_API_URL || 'https://ocean.api/v1/publish',
     middlewareWebhookUrl: process.env.MIDDLEWARE_URL || 'https://hook.make.com/your-webhook-id',
     openSeaApiUrl: process.env.OPENSEA_API_URL || 'https://api.opensea.io/v1/asset/create',
-    googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxmke0-Fu1FuY0_W6dliNvjm7eH9tOlW2tfOzxJgkEZr2uLY7FIPZ4iDKmn1ZSoV8vo/exec'
+    googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxmke0-Fu1FuY0_W6dliNvjm7eH9tOlW2tfOzxJgkEZr2uLY7FIPZ4iDKmn1ZSoV8vo/exec',
+    batchTradeThresholdMB: parseFloat(process.env.BATCH_TRADE_THRESHOLD_MB || '500'), // 500 MB eşiği
+    dailyGoalUSD: parseFloat(process.env.DAILY_GOAL_USD || '3000'),
+    marketOrderTicker: process.env.MARKET_ORDER_TICKER || 'BTC/USDT'
 };
 
 export const dbConfig = {
