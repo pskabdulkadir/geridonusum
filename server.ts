@@ -140,7 +140,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
     // Ocean Protocol v4 DDO (Decentralized Data Object) yapısı oluşturuluyor
     const ddoPayload = {
       "@context": ["https://w3id.org/did/v1", "https://w3id.org/did/v2"],
-      "id": `did:op:${nftAddress}-${chainId}-${proof.id}`, // Varlık için benzersiz bir DID
+      // "id": `did:op:${nftAddress}-${chainId}-${proof.id}`, // Ocean Provider'ın DID oluşturmasına izin ver
       "version": "4.0.0",
       "chainId": chainId,
       "nftAddress": nftAddress, // Data NFT kontrat adresi
@@ -159,7 +159,7 @@ async function broadcastToGreenFinanceNetwork(proof: any) {
         {
           "id": "1",
           "type": "access",
-          "files": "0x", // Dosya referansı için placeholder, proofData metadata içinde
+          "files": [], // Doğrudan dosya referansı yerine proofData metadata içinde
           "serviceEndpoint": "https://v4.provider.oceanprotocol.com",
           "timeout": 0,
           "datatokenAddress": nftAddress // Data NFT adresi aynı zamanda datatoken adresi olarak kullanılıyor
