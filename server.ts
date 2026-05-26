@@ -253,19 +253,21 @@ async function broadcastToGreenFinanceNetwork(proof: any): Promise<boolean> {
     let success = false;
 
     while (attempts < maxRetries && !success) {
+      const currentAquarius = aquariusEndpoints[attempts % aquariusEndpoints.length];
+      const currentProvider = providerEndpoints[attempts % providerEndpoints.length];
       attempts++;
       try {
         // 1. ADIM: Metadata'ya kaydet (Aquarius Servisi)
-        const metadataUrl = "https://aquarius.oceanprotocol.com/api/aquarius/assets/ddo";
-        pushLog('FINANCE', 'INFO', `[METADATA_PUBLISH] Varlık kimliği dizine ekleniyor...`);
+        const metadataUrl = `${currentAquarius}/api/aquarius/assets/ddo`;
+        pushLog('FINANCE', 'INFO', `[METADATA_PUBLISH] Varlık dizine ekleniyor: ${currentAquarius}`);
         await axios.post(metadataUrl, ddoPayload, {
           headers: commonHeaders,
           timeout: 20000 // Global ağ gecikmeleri için süre artırıldı
         });
-        pushLog('FINANCE', 'SUCCESS', `[METADATA_INDEXED] Varlık Aquarius pazar dizinine mühürlendi.`);
+        pushLog('FINANCE', 'SUCCESS', `[ASSET_PUBLISH_201_CREATED] Varlık Aquarius pazar dizinine mühürlendi.`);
 
         // 2. ADIM: Provider'a bildir (Servisi başlat)
-        const providerUrl = `${currentProvider.replace(/\/$/, '')}/api/v1/services/initialize`;
+        const providerUrl = `${currentProvider}/api/services/initialize`;
         pushLog('FINANCE', 'INFO', `[PROVIDER_INITIALIZING] Erişim katmanı oluşturuluyor: ${currentProvider}`);
         response = await axios.post(providerUrl, {
           document: ddoPayload, // Tam DDO objesi
@@ -293,7 +295,7 @@ async function broadcastToGreenFinanceNetwork(proof: any): Promise<boolean> {
     }
 
     if (response && (response.status === 200 || response.status === 201)) {
-      pushLog('FINANCE', 'SUCCESS', `[DATA_ASSET_LISTED] Veri NFT ve Datatoken basıldı. Ocean Market'te yayına girdi! ID: ${proof.id}`);
+      pushLog('FINANCE', 'SUCCESS', `[MARKET_LISTING_SUCCESS] Veri NFT ve Datatoken mühürlendi. Ocean Market'te yayına girdi! ID: ${proof.id}`);
       
       // Başarı durumunda mülkiyet kanıtını konsola mühürle
       const ddoAddress = response.data?.did || "ZİNCİR_ÜSTÜ_DOĞRULANIYOR";

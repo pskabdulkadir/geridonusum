@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  aegis_scraper:
+    build: .
+    command: python agents/smart_scraper.py
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+
+  aegis_orchestrator:
+    build: .
+    command: python orchestrator.py
+    env_file: .env
+    depends_on:
+      - aegis_scraper
+    volumes:
+      - ./data:/app/data
+      - ./trading:/app/trading
+
+  aegis_watchdog:
+    build: .
+    command: python utils/watchdog_monitor.py
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
