@@ -117,7 +117,7 @@ export default function App() {
     } catch (err) {
       // Render sunucusu kilitlendiğinde veya yeniden başladığında sessizce bekle
       if (err instanceof TypeError) {
-        console.debug("[STATS] Connectivity lost. Retrying in next cycle...");
+        console.debug("[STATS] Sunucuya erişilemiyor (CORS veya Ağ Hatası). Yeniden denenecek.");
       } else {
         console.error("Failed to fetch statistics from backend:", err);
       }
@@ -164,7 +164,8 @@ export default function App() {
 
   // Connect Server-Sent Events (SSE) for raw cybernetic log streaming
   useEffect(() => {
-    const sse = new EventSource(`${API_BASE}/api/stream-logs`);
+    // SSE için withCredentials gerekebilir
+    const sse = new EventSource(`${API_BASE}/api/stream-logs`, { withCredentials: true });
 
     sse.onmessage = (event) => {
       const newLog: LogEntry = JSON.parse(event.data);
