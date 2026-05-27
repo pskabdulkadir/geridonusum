@@ -47,8 +47,12 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 3. Hata Yakalayıcıya CORS İzni Vermek: cors() en üstte olmalı ki 404/500 hatalarında da header gönderilsin.
-app.use(cors({
+// 1. GÜVENLİK VE AYRIŞTIRMA: Middleware'ler en üstte olmalı
+app.use(express.json());
+
+// 3. ADIM: Hata Yakalayıcıya CORS İzni Vermek (cors() en üstte)
+// No 'Access-Control-Allow-Origin' hatasını 404 durumlarında da engellemek için
+const corsOptions = {
   origin: [
     "https://geridonusum.onrender.com", 
     "https://cekcek.onrender.com", 
@@ -58,7 +62,20 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Last-Event-ID'],
   credentials: true
-}));
+};
+app.use(cors(corsOptions));
+
+// DEBUG LOG: Gelen istekleri terminalde göster (404'leri yakalamak için)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    console.log(`[INCOMING_API_REQUEST] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+// 2. ADIM: API Rotaları için Merkezi Router (Prefix Yönetimi)
+const apiRouter = express.Router();
+app.use('/api', apiRouter);
 
 export const mainOptimizer = new DataOptimizer();
 export const mainMarketplace = new MarketplaceManager();
@@ -755,7 +772,7 @@ pushLog('SYSTEM', 'INFO', 'Üretim Çekirdeği: Executor ve Ledger modülleri ak
 /**
  * Toplu Onay (The Push): Tüm PENDING_QUEUE varlıklarını piyasaya sürer
  */
-app.post("/api/market/publish-all", async (req, res) => {
+apiRouter.post("/market/publish-all", async (req, res) => {
   try {
     const pendingItems = await ReadyToSellModel.find({ isSold: false });
     pushLog('MARKET', 'ANALYZE', `[BATCH_PUSH] ${pendingItems.length} varlık için toplu onay başlatıldı.`);
@@ -773,7 +790,7 @@ app.post("/api/market/publish-all", async (req, res) => {
 /**
  * Yönetici Komut Satırı İşleyici
  */
-app.post("/api/admin/command", (req, res) => {
+apiRouter.post("/admin/command", (req, res) => {
   const { command } = req.body;
   
   if (command === "SET_AUTONOMOUS_DEPLOYMENT_TRUE --gas-payer=buyer --mode=batch") {
@@ -798,7 +815,7 @@ app.post("/api/admin/command", (req, res) => {
 /**
  * Retrieve system state and performance metrics
  */
-app.get("/api/stats", async (req, res) => {
+apiRouter.get("/stats", async (req, res) => {
   try {
     let readyToSell: ReadyToSellItem[] = [];
     let transactions: TransactionRecord[] = [];
@@ -854,7 +871,7 @@ app.get("/api/stats", async (req, res) => {
  * Wallet Balance Checker - Canlı Polygon Mainnet Bakiye Sorgusu
  * GELİR YAPILAN CÜZDAN: blockchainConfig.payoutWallet (satış sonrası para buraya gidecek)
  */
-app.get("/api/wallet-balance", async (req, res) => {
+apiRouter.get("/wallet-balance", async (req, res) => {
   try {
     // Singleton BlockchainRouter üzerinden bakiye kontrolü yap (Polygon ağını zorla)
     let walletAddress: string | null = null;
@@ -888,7 +905,7 @@ app.get("/api/wallet-balance", async (req, res) => {
 /**
  * Configure target payout destination and toggle zero-gas mode
  */
-app.post("/api/payout-config", (req, res) => {
+apiRouter.post("/payout-config", (req, res) => {
   const { payoutWalletAddress, zeroGasModeActive } = req.body;
   if (typeof payoutWalletAddress === "string") {
     serverState.payoutWalletAddress = payoutWalletAddress.trim();
@@ -905,7 +922,7 @@ app.post("/api/payout-config", (req, res) => {
  * PROTOKOL_REAL: Blokzinciri üzerindeki başarılı satın alımı onaylar.
  * İşlemi alıcı tetiklediği için sunucu sadece kanıtı (txHash) doğrular ve mühürler.
  */
-app.post("/api/market/confirm-sale", async (req, res) => {
+apiRouter.post("/market/confirm-sale", async (req, res) => {
   const { itemId, txHash } = req.body;
   try {
     const item = await ReadyToSellModel.findOne({ id: itemId });
@@ -935,7 +952,7 @@ app.post("/api/market/confirm-sale", async (req, res) => {
 /**
  * Active SSE Stream listener route for scrolling terminal console feeds
  */
-app.get("/api/stream-logs", (req, res) => {
+apiRouter.get("/stream-logs", (req, res) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -964,7 +981,7 @@ app.get("/api/stream-logs", (req, res) => {
 /**
  * Run autonomous crawler bot thread
  */
-app.post("/api/crawl/start", (req, res) => {
+apiRouter.post("/crawl/start", (req, res) => {
   if (serverState.isCrawling) {
     return res.json({ success: true, message: "Otonom tarayıcı zaten sektörleri tarıyor." });
   }
@@ -981,7 +998,7 @@ app.post("/api/crawl/start", (req, res) => {
 /**
  * Gracefully stop active crawler bot thread
  */
-app.post("/api/crawl/stop", (req, res) => {
+apiRouter.post("/crawl/stop", (req, res) => {
   if (!serverState.isCrawling) {
     return res.json({ success: true, message: "Sistem zaten bekleme modunda." });
   }
@@ -996,7 +1013,7 @@ app.post("/api/crawl/stop", (req, res) => {
  * Run full on-demand code optimization, Carbon calculation, blockchain proofing,
  * and Gemini-generated Sustainable code suggestions for a user-inputted URI!
  */
-app.post("/api/optimize-url", async (req, res) => {
+apiRouter.post("/optimize-url", async (req, res) => {
   const { url } = req.body;
   if (!url) {
     return res.status(400).json({ error: "Eksik parametre: hedef URL." });
@@ -1100,7 +1117,7 @@ async function startServer() {
   // Bağlantıları başlat (await etmiyoruz, böylece bir sonraki satıra geçer)
   initConnections();
 
-  // 2. Middleware ve Sunucu Yapılandırması
+  // 4. ADIM: Statik Dosyalar ve SPA Catch-all (Her zaman en sonda olmalı)
   try {
     if (process.env.NODE_ENV !== "production") {
       const vite = await createViteServer({
@@ -1115,17 +1132,17 @@ async function startServer() {
       // Statik dosyaları sun (Production)
       app.use(express.static(distPath));
 
-      // SPA Yönlendirmesi: API olmayan her şeyi index.html'e yönlendir (Client-side routing desteği)
+      // SPA Catch-all: API isteklerini atla, diğerlerini index.html'e gönder
       app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api') || req.path.startsWith('/healthz')) return next();
+        // Çift kontrol: Eğer istek /api ile başlıyorsa ve buraya düştüyse rota yok demektir.
+        if (req.path.startsWith('/api')) return next();
         res.sendFile(path.join(distPath, 'index.html'));
       });
-
-      console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
     }
 
-    // API 404 İşleyici: Eşleşmeyen API isteklerinde CORS başlıklarını korumak için manuel yanıt.
+    // Rotalar ve catch-all bittiğinde hala buradaysak gerçek bir 404'tür.
     app.use('/api', (req, res) => {
+      res.header("Access-Control-Allow-Origin", "*"); // Manuel CORS garantisi
       res.status(404).json({ 
         error: "API uç noktası bulunamadı", 
         path: req.originalUrl 

@@ -33,8 +33,11 @@ import {
 
 import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
 
-// 2. API URL'lerini Dinamik Yap (Trailing slash temizleme koruması eklendi)
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+// 2. API URL'lerini Dinamik Yap: Trailing slash temizleme ve prefix koruması
+const API_BASE = (import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/$/, "") // Sondaki / işaretini sil
+  .replace(/\/api$/, ""); // Eğer yanlışlıkla sonuna /api eklendiyse onu da temizle (çift /api/api oluşmaması için)
 
 export default function App() {
   // Navigation Tabs
@@ -107,11 +110,12 @@ export default function App() {
         setStats(data);
       } else {
         const text = await response.text();
-        console.warn(`[FETCH_ERROR] API ${response.status} döndürdü.`, {
-          url: `${API_BASE}/api/stats`,
+        console.warn(`[404_DETAY] API rotası bulunamadı veya HTML döndü.`, {
+          fullUrl: `${API_BASE}/api/stats`,
           status: response.status,
           contentType,
-          bodySample: text.substring(0, 100)
+          // Eğer sunucu index.html döndürüyorsa ilk 50 karakterde <!DOCTYPE... görünür
+          responseStart: text.substring(0, 50) 
         });
       }
     } catch (err) {
