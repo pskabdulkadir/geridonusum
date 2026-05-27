@@ -108,7 +108,7 @@ export default function App() {
       } else {
         const text = await response.text();
         console.warn(`[FETCH_ERROR] API ${response.status} döndürdü.`, {
-          url: "/api/stats",
+          url: `${API_BASE}/api/stats`,
           status: response.status,
           contentType,
           bodySample: text.substring(0, 100)
@@ -136,12 +136,20 @@ export default function App() {
     setIsLoadingBalance(true);
     try {
       const response = await fetch(`${API_BASE}/api/wallet-balance`);
-      if (response.ok) {
+      const contentType = response.headers.get("content-type");
+
+      if (!response.ok) throw new Error(`HTTP Hata: ${response.status}`);
+      
+      if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
         setWalletBalance(data);
+      } else {
+        throw new Error("Sunucudan JSON formatında olmayan geçersiz bir yanıt geldi.");
       }
     } catch (err) {
-      console.error("Failed to fetch wallet balance:", err);
+      console.error("Cüzdan bakiyesi alınamadı:", err);
+      // Bakiye alınamadığında kullanıcıya hata göstermek için state'i güncelle
+      setWalletBalance(prev => prev ? { ...prev, error: "Bağlantı Hatası" } : null);
     } finally {
       setIsLoadingBalance(false);
     }

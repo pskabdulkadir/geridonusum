@@ -47,9 +47,11 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 3. CORS Sorunlarını Çöz (Render'da Frontend URL'nizi buraya yazın)
+// 3. CORS Yapılandırması: Frontend erişimine izin ver
 app.use(cors({
-  origin: process.env.NODE_ENV === "production" ? ["https://geridonusum.onrender.com"] : ["http://localhost:5173"],
+  origin: ['https://geridonusum.onrender.com', 'http://localhost:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true
 }));
 
