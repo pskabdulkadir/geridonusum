@@ -47,9 +47,17 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 1. CORS Yapılandırması: Seçenek 2 uyarınca en üste ve daha sade bir yapıya alındı.
+// 1. CORS Yapılandırması: Render üretimi ve hata durumları için optimize edildi.
 app.use(cors({
-  origin: ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"],
+  origin: function (origin, callback) {
+    const allowedOrigins = ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"];
+    // Origin yoksa (mobil app veya server-to-server) veya izinli listedeyse veya onrender.com alt alan adıysa izin ver
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith(".onrender.com")) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS Policy: Origin not allowed"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Last-Event-ID"],
   credentials: true
@@ -1121,19 +1129,26 @@ async function startServer() {
     } else {
       const distPath = path.resolve(process.cwd(), "dist");
 
-      // Statik dosyaları sun (Production)
-      app.use(express.static(distPath));
+      // Önce statik dosyaları sunuyoruz (JS, CSS vb.)
+      app.use(express.static(distPath, { index: false }));
 
-      // SPA Catch-all: API isteklerini atla, diğerlerini index.html'e gönder
-      app.get('*', (req, res, next) => {
-        // Çift kontrol: Eğer istek /api ile başlıyorsa ve buraya düştüyse rota yok demektir.
-        if (req.path.startsWith('/api')) return next();
+      // SPA Yönlendirmesi: API olmayan her şeyi index.html'e yönlendir.
+      app.get("*", (req, res, next) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/healthz')) {
+          return next(); // API rotasıysa catch-all'u geç, aşağıdaki 404 handler'a düşsün
+        }
         res.sendFile(path.join(distPath, 'index.html'));
       });
     }
 
     // Rotalar ve catch-all bittiğinde hala buradaysak gerçek bir 404'tür.
-    app.use('/api', (req, res) => {
+    app.use('/api', (req, res, next) => {
+      // CORS paketinin hata durumunda da çalışması için origin başlığını manuel ekleyelim
+      const origin = req.headers.origin;
+      if (origin) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+      }
       res.status(404).json({ 
         error: "API uç noktası bulunamadı", 
         path: req.originalUrl 

@@ -33,11 +33,13 @@ import {
 
 import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
 
-// 2. API URL'lerini Dinamik Yap: Trailing slash temizleme ve prefix koruması
-const API_BASE = (import.meta.env.VITE_API_URL || "")
-  .trim()
-  .replace(/\/$/, "") // Sondaki / işaretini sil
-  .replace(/\/api$/, ""); // Eğer yanlışlıkla sonuna /api eklendiyse onu da temizle (çift /api/api oluşmaması için)
+// 2. API URL'lerini Dinamik Yap: Render ortam değişkenlerini temizle
+const getApiBase = () => {
+  const url = (import.meta.env.VITE_API_URL || "").trim();
+  if (!url) return "";
+  return url.replace(/\/$/, "").replace(/\/api$/, "");
+};
+const API_BASE = getApiBase();
 
 export default function App() {
   // Navigation Tabs
