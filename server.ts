@@ -1096,12 +1096,15 @@ async function startServer() {
       console.log("[SERVER] Vite middleware initialized in Development mode.");
     } else {
       const distPath = path.join(process.cwd(), "dist");
-      app.use(express.static(distPath));
-      app.get("*", (req, res, next) => {
-        // API isteklerini pas geç, yoksa index.html döner
-        if (req.path.startsWith('/api')) return next();
+      
+      // Önce statik dosyaları sun (ancak API rotalarına dokunma)
+      app.use(express.static(distPath, { index: false }));
+
+      // SPA için catch-all rotası: SADECE API olmayan istekleri index.html'e yönlendir
+      app.get(/^(?!\/api).+/, (req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
+
       console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
     }
 

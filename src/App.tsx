@@ -103,11 +103,12 @@ export default function App() {
         const data = await response.json();
         setStats(data);
       } else {
-        const isHtml = contentType && contentType.includes("text/html");
-        console.warn("[FETCH] Received non-JSON or stale response from server", {
+        const text = await response.text();
+        console.warn(`[FETCH_ERROR] API ${response.status} döndürdü.`, {
+          url: "/api/stats",
           status: response.status,
           contentType,
-          isHtml
+          bodySample: text.substring(0, 100)
         });
       }
     } catch (err) {
