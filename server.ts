@@ -47,16 +47,14 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 3. CORS Yapılandırması: Render üretimi ve tarayıcı güvenlik politikaları için optimize edildi.
+// 3. Hata Yakalayıcıya CORS İzni Vermek: cors() en üstte olmalı ki 404/500 hatalarında da header gönderilsin.
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS Not Allowed by Server'));
-    }
-  },
+  origin: [
+    "https://geridonusum.onrender.com", 
+    "https://cekcek.onrender.com", 
+    "http://localhost:5173",
+    /\.onrender\.com$/ // Tüm onrender.com alt alan adlarına izin ver (esneklik için)
+  ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Last-Event-ID'],
   credentials: true
