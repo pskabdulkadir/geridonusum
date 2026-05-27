@@ -10,6 +10,7 @@
 import mongoose from "mongoose";
 import express from "express";
 import path from "path";
+import cors from "cors";
 import axios from "axios";
 import { ethers } from "ethers";
 import { createServer as createViteServer } from "vite";
@@ -45,6 +46,13 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 
 // --- GLOBAL SINGLETONS ---
 const app = express();
+
+// 3. CORS Sorunlarını Çöz (Render'da Frontend URL'nizi buraya yazın)
+app.use(cors({
+  origin: process.env.NODE_ENV === "production" ? ["https://frontend-hizmetin.onrender.com"] : ["http://localhost:5173"],
+  credentials: true
+}));
+
 export const mainOptimizer = new DataOptimizer();
 export const mainMarketplace = new MarketplaceManager();
 
@@ -1096,11 +1104,13 @@ async function startServer() {
       console.log("[SERVER] Vite middleware initialized in Development mode.");
     } else {
       const distPath = path.join(process.cwd(), "dist");
-      
-      // Önce statik dosyaları sun (ancak API rotalarına dokunma)
+
+      // Önce statik dosyaları sun (index.html hariç)
       app.use(express.static(distPath, { index: false }));
 
-      // SPA için catch-all rotası: SADECE API olmayan istekleri index.html'e yönlendir
+      // 4. Single Page Application (SPA) Yönlendirmesi
+      // API rotaları zaten yukarıda tanımlandığı için buraya sadece eşleşmeyenler düşer.
+      // API isteklerinin index.html dönmesini engellemek için kontrol ekliyoruz.
       app.get(/^(?!\/api).+/, (req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });

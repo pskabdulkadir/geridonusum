@@ -33,6 +33,9 @@ import {
 
 import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
 
+// 2. API URL'lerini Dinamik Yap
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function App() {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<"bot" | "manual" | "marketplace" | "blueprint">("bot");
@@ -97,7 +100,7 @@ export default function App() {
   // Poll server state API for dynamic dashboard synchronization
   const fetchStats = async () => {
     try {
-      const response = await fetch("/api/stats");
+      const response = await fetch(`${API_BASE}/api/stats`);
       const contentType = response.headers.get("content-type");
       if (response.ok && contentType && contentType.includes("application/json")) {
         const data = await response.json();
@@ -132,7 +135,7 @@ export default function App() {
   const fetchWalletBalance = async () => {
     setIsLoadingBalance(true);
     try {
-      const response = await fetch("/api/wallet-balance");
+      const response = await fetch(`${API_BASE}/api/wallet-balance`);
       if (response.ok) {
         const data = await response.json();
         setWalletBalance(data);
@@ -153,7 +156,7 @@ export default function App() {
 
   // Connect Server-Sent Events (SSE) for raw cybernetic log streaming
   useEffect(() => {
-    const sse = new EventSource("/api/stream-logs");
+    const sse = new EventSource(`${API_BASE}/api/stream-logs`);
 
     sse.onmessage = (event) => {
       const newLog: LogEntry = JSON.parse(event.data);
@@ -183,7 +186,7 @@ export default function App() {
   // Handle Crawl Bot start signal emission
   const startCrawlBot = async () => {
     try {
-      await fetch("/api/crawl/start", { method: "POST" });
+      await fetch(`${API_BASE}/api/crawl/start`, { method: "POST" });
     } catch (err) {
       console.error(err);
     }
@@ -192,7 +195,7 @@ export default function App() {
   // Handle Crawl Bot stop signal emission
   const stopCrawlBot = async () => {
     try {
-      await fetch("/api/crawl/stop", { method: "POST" });
+      await fetch(`${API_BASE}/api/crawl/stop`, { method: "POST" });
     } catch (err) {
       console.error(err);
     }
@@ -208,7 +211,7 @@ export default function App() {
     setOptResult(null);
 
     try {
-      const res = await fetch("/api/optimize-url", {
+      const res = await fetch(`${API_BASE}/api/optimize-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl }),
@@ -235,7 +238,7 @@ export default function App() {
     setWalletSaveSuccess(false);
     
     try {
-      const res = await fetch("/api/payout-config", {
+      const res = await fetch(`${API_BASE}/api/payout-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -312,7 +315,7 @@ export default function App() {
       await tx.wait();
       
       // PROTOKOL_REAL: Sunucuya satışın on-chain olarak gerçekleştiğini bildir
-      await fetch("/api/market/confirm-sale", {
+      await fetch(`${API_BASE}/api/market/confirm-sale`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: item.id, txHash: tx.hash })
@@ -333,7 +336,7 @@ export default function App() {
   // Toplu Onay (Publish All) Tetikleyici
   const handlePublishAll = async () => {
     try {
-      const res = await fetch("/api/market/publish-all", { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/market/publish-all`, { method: "POST" });
       if (res.ok) fetchStats();
     } catch (err) {
       console.error(err);
@@ -344,7 +347,7 @@ export default function App() {
   const handleSendCommand = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/admin/command", {
+      const res = await fetch(`${API_BASE}/api/admin/command`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: adminCommand })
@@ -611,7 +614,7 @@ export default function App() {
                     className="w-full py-2.5 rounded-xl border border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-all font-mono text-xs font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-30"
                   >
                     <Square className="w-4 h-4 fill-current" />
-                    BEKLEME MODU
+                    MOTORU DURDUR
                   </button>
                 </div>
               </div>
@@ -1227,15 +1230,22 @@ export default function App() {
                           </span>
                         </div>
                       </div>
-                      <button
-                      onClick={stats.isCrawling ? stopCrawlBot : startCrawlBot} // Motoru başlat/durdur
-                      className={`font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all pointer shrink-0 ${stats.isCrawling 
-                        ? "bg-red-950/45 hover:bg-red-900/60 border-red-500/30 text-red-400" 
-                        : "bg-emerald-950/45 hover:bg-emerald-900/60 border-emerald-500/30 text-emerald-400"
-                      }`}
-                      >
-                      {stats.isCrawling ? "OTONOM MOTORU DURDUR" : "OTONOM MOTORU BAŞLAT"}
-                      </button>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={startCrawlBot}
+                          disabled={stats.isCrawling}
+                          className="font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-emerald-950/45 hover:bg-emerald-900/60 border-emerald-500/30 text-emerald-400 disabled:opacity-30"
+                        >
+                          MOTORU BAŞLAT
+                        </button>
+                        <button
+                          onClick={stopCrawlBot}
+                          disabled={!stats.isCrawling}
+                          className="font-mono text-[9px] uppercase font-black tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-red-950/45 hover:bg-red-900/60 border-red-500/30 text-red-400 disabled:opacity-30"
+                        >
+                          MOTORU DURDUR
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-3.5 max-h-[420px] overflow-y-auto pr-1">
