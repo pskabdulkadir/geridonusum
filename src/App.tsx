@@ -110,12 +110,13 @@ export default function App() {
         setStats(data);
       } else {
         const text = await response.text();
-        console.warn(`[404_DETAY] API rotası bulunamadı veya HTML döndü.`, {
-          fullUrl: `${API_BASE}/api/stats`,
+        console.error(`[API_CONNECTION_ERROR] Rota bulunamadı veya CORS engeline takıldı.`, {
+          endpoint: "/api/stats",
+          fullUrl: response.url,
           status: response.status,
-          contentType,
-          // Eğer sunucu index.html döndürüyorsa ilk 50 karakterde <!DOCTYPE... görünür
-          responseStart: text.substring(0, 50) 
+          type: response.type,
+          contentType: response.headers.get("content-type"),
+          body: text.substring(0, 100)
         });
       }
     } catch (err) {

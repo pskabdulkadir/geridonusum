@@ -47,23 +47,15 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 1. GÜVENLİK VE AYRIŞTIRMA: Middleware'ler en üstte olmalı
-app.use(express.json());
-
-// 3. ADIM: Hata Yakalayıcıya CORS İzni Vermek (cors() en üstte)
-// No 'Access-Control-Allow-Origin' hatasını 404 durumlarında da engellemek için
-const corsOptions = {
-  origin: [
-    "https://geridonusum.onrender.com", 
-    "https://cekcek.onrender.com", 
-    "http://localhost:5173",
-    /\.onrender\.com$/ // Tüm onrender.com alt alan adlarına izin ver (esneklik için)
-  ],
+// 1. CORS Yapılandırması: Seçenek 2 uyarınca en üste ve daha sade bir yapıya alındı.
+app.use(cors({
+  origin: ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Last-Event-ID'],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Last-Event-ID"],
   credentials: true
-};
-app.use(cors(corsOptions));
+}));
+
+app.use(express.json());
 
 // DEBUG LOG: Gelen istekleri terminalde göster (404'leri yakalamak için)
 app.use((req, res, next) => {
@@ -1142,7 +1134,6 @@ async function startServer() {
 
     // Rotalar ve catch-all bittiğinde hala buradaysak gerçek bir 404'tür.
     app.use('/api', (req, res) => {
-      res.header("Access-Control-Allow-Origin", "*"); // Manuel CORS garantisi
       res.status(404).json({ 
         error: "API uç noktası bulunamadı", 
         path: req.originalUrl 
