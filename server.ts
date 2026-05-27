@@ -47,11 +47,18 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 3. CORS Yapılandırması: Render ortamında frontend ve backend farklı domainlerde olduğu için originleri kesinleştiriyoruz.
+// 3. CORS Yapılandırması: Render üretimi ve tarayıcı güvenlik politikaları için optimize edildi.
 app.use(cors({
-  origin: ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"],
+  origin: (origin, callback) => {
+    const allowedOrigins = ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"];
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS Not Allowed by Server'));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Last-Event-ID'],
   credentials: true
 }));
 
@@ -1105,20 +1112,27 @@ async function startServer() {
       app.use(vite.middlewares);
       console.log("[SERVER] Vite middleware initialized in Development mode.");
     } else {
-      const distPath = path.join(process.cwd(), "dist");
+      const distPath = path.resolve(process.cwd(), "dist");
 
-      // Önce statik dosyaları sun (index.html hariç)
-      app.use(express.static(distPath, { index: false }));
+      // Statik dosyaları sun (Production)
+      app.use(express.static(distPath));
 
-      // 4. Single Page Application (SPA) Yönlendirmesi
-      // API rotaları zaten yukarıda tanımlandığı için buraya sadece eşleşmeyenler düşer.
-      // API isteklerinin index.html dönmesini engellemek için kontrol ekliyoruz.
-      app.get(/^(?!\/api).+/, (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
+      // SPA Yönlendirmesi: API olmayan her şeyi index.html'e yönlendir (Client-side routing desteği)
+      app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/healthz')) return next();
+        res.sendFile(path.join(distPath, 'index.html'));
       });
 
       console.log("[SERVER] Serving pre-compiled production templates from /dist folder.");
     }
+
+    // API 404 İşleyici: Eşleşmeyen API isteklerinde CORS başlıklarını korumak için manuel yanıt.
+    app.use('/api', (req, res) => {
+      res.status(404).json({ 
+        error: "API uç noktası bulunamadı", 
+        path: req.originalUrl 
+      });
+    });
 
     // Global error middleware to prevent crash on async route errors
     app.use((err: any, req: any, res: any, next: any) => {
