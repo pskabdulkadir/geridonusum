@@ -47,17 +47,10 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 3. CORS Yapılandırması: Render ortamında frontend ve backend farklı domainlerde olduğu için originleri genişletiyoruz.
+// 3. CORS Yapılandırması: Render ortamında frontend ve backend farklı domainlerde olduğu için originleri kesinleştiriyoruz.
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== "production") {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS Policy: This origin is not allowed."));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true
 }));

@@ -33,8 +33,8 @@ import {
 
 import { CoreStats, LogEntry, OptimizationResult } from "./types.ts";
 
-// 2. API URL'lerini Dinamik Yap
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// 2. API URL'lerini Dinamik Yap (Trailing slash temizleme koruması eklendi)
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 export default function App() {
   // Navigation Tabs
