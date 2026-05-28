@@ -47,19 +47,24 @@ import { MarketplaceManager } from "./server/marketplace.ts";
 // --- GLOBAL SINGLETONS ---
 const app = express();
 
-// 1. CORS Yapılandırması: Render üretimi ve hata durumları için optimize edildi.
+// 1. CORS Yapılandırması: Render üretimi için optimize edildi.
+// credentials: true kullanıldığında origin '*' olamaz, bu yüzden dinamik kontrol yapıyoruz.
 app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = ["https://geridonusum.onrender.com", "https://cekcek.onrender.com", "http://localhost:5173"];
-    // Origin yoksa (mobil app veya server-to-server) veya izinli listedeyse veya onrender.com alt alan adıysa izin ver
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith(".onrender.com")) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS Policy: Origin not allowed"));
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      "https://geridonusum.onrender.com",
+      "https://cekcek.onrender.com",
+      "http://localhost:5173"
+    ];
+    // İstek origin'i listedeyse veya .onrender.com ile bitiyorsa izin ver
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".onrender.com")) {
+      return callback(null, true);
     }
+    callback(null, false); // Engellemek yerine header göndermemeyi tercih ediyoruz (daha stabil)
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Last-Event-ID"],
+  exposedHeaders: ["Last-Event-ID"],
   credentials: true
 }));
 
@@ -1141,24 +1146,23 @@ async function startServer() {
       });
     }
 
-    // Rotalar ve catch-all bittiğinde hala buradaysak gerçek bir 404'tür.
-    app.use('/api', (req, res, next) => {
-      // CORS paketinin hata durumunda da çalışması için origin başlığını manuel ekleyelim
-      const origin = req.headers.origin;
-      if (origin) {
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header("Access-Control-Allow-Credentials", "true");
-      }
+    // Rotalar ve catch-all bittiğinde hala buradaysak gerçek bir API 404'tür.
+    app.use('/api', (req, res) => {
       res.status(404).json({ 
         error: "API uç noktası bulunamadı", 
         path: req.originalUrl 
       });
     });
 
-    // Global error middleware to prevent crash on async route errors
+    // Global hata yakalayıcı: CORS başlıklarının hata durumunda da iletilmesini garanti edelim.
     app.use((err: any, req: any, res: any, next: any) => {
       console.error("[SERVER_ERROR]", err);
       if (!res.headersSent) {
+        const origin = req.headers.origin;
+        if (origin && (origin.endsWith(".onrender.com") || origin === "http://localhost:5173")) {
+          res.header("Access-Control-Allow-Origin", origin);
+          res.header("Access-Control-Allow-Credentials", "true");
+        }
         res.status(500).json({ error: "Internal Server Error", message: err.message });
       }
     });
